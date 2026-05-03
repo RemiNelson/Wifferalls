@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WIF Reader</title>
+  <link rel="stylesheet" href="stylesheet.css">
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>WIF Reader</h1>
+    <p>Weaving Information File viewer &mdash; WIF 1.0 / 1.1</p>
+  </div>
+</header>
+
+<!-- Upload screen -->
+<div id="uploadArea">
+  <div class="drop-zone" id="dropZone">
+    <div class="icon">🧵</div>
+    <h2>Open a WIF file</h2>
+    <p>Drag &amp; drop a .wif file here, or click below to browse</p>
+    <button class="btn" id="browseBtn">Choose File</button>
+    <input type="file" id="fileInput" accept=".wif,.WIF">
+  </div>
+</div>
+
+<!-- Main app -->
+<div id="app">
+  <div class="topbar">
+    <div>
+      <span class="filename" id="fileName"></span>
+      <span class="filesize" id="fileSize"></span>
+    </div>
+    <div style="display:flex;gap:0.5rem;">
+      <button class="btn btn-ghost btn-sm" id="exportBtn" onclick="exportWIF()" title="Download a WIF file with your colour edits">&#x2193; Export WIF</button>
+      <button class="btn btn-ghost btn-sm" onclick="exportPDF()" title="Open a print-ready PDF of the weaving draft">&#x2399; Export PDF</button>
+      <button class="btn btn-ghost btn-sm" onclick="resetApp()">Load Another</button>
+    </div>
+  </div>
+
+  <div id="errorBox" class="error" style="display:none;"></div>
+
+  <div id="metaSection"></div>
+  <div id="notesSection" style="display:none;">
+    <div class="section-label">Notes</div>
+    <div class="notes-box" id="notesContent"></div>
+  </div>
+  <div id="paletteSection" style="display:none;">
+    <div class="section-label">Color Palette</div>
+    <div class="palette-tools">
+      <input type="color" id="colorPicker" title="Custom colour">
+      <button class="btn btn-ghost btn-sm" id="eyedropperBtn" onclick="toggleEyedropper()" title="Sample a colour from the draft (Esc to cancel)">&#x1F489; Sample</button>
+      <button class="btn btn-ghost btn-sm" id="undoBtn" onclick="undo()" title="Undo last colour change (Ctrl+Z)">&#x21A9; Undo</button>
+    </div>
+    <div class="swatches" id="swatches"></div>
+  </div>
+
+  <div class="section-label">Weaving Draft</div>
+
+  <div class="controls">
+    <label>
+      Cell size
+      <input type="range" id="cellSizeRange" min="4" max="32" value="12"
+             oninput="changeCellSize(+this.value)">
+      <span id="cellSizeLbl">12px</span>
+    </label>
+    <label>
+      <input type="checkbox" id="showGrid" checked onchange="renderDraft()">
+      Grid lines
+    </label>
+    <label>
+      <input type="checkbox" id="showLabels" checked onchange="renderDraft()">
+      Shaft / treadle labels
+    </label>
+  </div>
+
+  <div class="draft-scroll">
+    <div class="draft-outer">
+      <!--
+        Layout (with gap columns/rows):
+          col 1: threading/drawdown  col 2: gap  col 3: tieup/treadling
+          row 1: threading           row 2: gap  row 3: drawdown
+          (tieup and treadling in col 3, rows 1 and 3)
+      -->
+      <div id="draftRoot" style="display:inline-grid; gap:0;">
+        <!-- threading panel (col 1 row 1) -->
+        <div class="panel-wrap" style="grid-column:1; grid-row:1;">
+          <div class="panel-label">Threading</div>
+          <canvas id="cThreading"></canvas>
+        </div>
+        <!-- tieup panel (col 2 row 1) -->
+        <div class="panel-wrap" style="grid-column:2; grid-row:1;" id="tieupWrap">
+          <div class="panel-label">Tie-up</div>
+          <canvas id="cTieup"></canvas>
+        </div>
+        <!-- fabric preview panel (col 1 row 2) — no label so canvas top meets tieup canvas bottom -->
+        <div class="panel-wrap" style="grid-column:1; grid-row:2;">
+          <canvas id="cDrawdown"></canvas>
+        </div>
+        <!-- treadling panel (col 2 row 2) — no label so canvas top meets tieup canvas bottom -->
+        <div class="panel-wrap" style="grid-column:2; grid-row:2;" id="treadlingWrap">
+          <canvas id="cTreadling"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="scripts.js"></script>
+</body>
+</html>
