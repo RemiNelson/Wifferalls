@@ -27,6 +27,11 @@ let paintLblSize = 0;
 // When true, renderDraft uses a white background (for PDF export)
 let printMode = false;
 
+// Editable threading/treadling structure (1-indexed)
+let editableThreading = null; // warpThread → [shafts]
+let editableTreadling = null; // weftPick → [treadles]
+let structureEditMode = false;
+
 const dropZone  = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
 const browseBtn = document.getElementById('browseBtn');
@@ -79,10 +84,15 @@ function resetApp() {
   wifData = null;
   editableWarpColors = null;
   editableWeftColors = null;
+  editableThreading = null;
+  editableTreadling = null;
+  structureEditMode = false;
   selectedColor = null;
   paintDraft = null;
   colorHistory.length = 0;
   eyedropperActive = false;
+  const editStructureCheck = document.getElementById('editStructure');
+  if (editStructureCheck) editStructureCheck.checked = false;
   fileInput.value = '';
   document.getElementById('app').style.display = 'none';
   document.getElementById('uploadArea').style.display = 'flex';
@@ -456,6 +466,30 @@ function renderDraft() {
     editableWarpColors = d.warpColors.slice();
     editableWeftColors = d.weftColors.slice();
   }
+
+  // Seed editable threading/treadling once per file load
+  if (!editableThreading) {
+    editableThreading = Object.create(null);
+    for (let i = 1; i <= W; i++) editableThreading[i] = (d.threading[i] || []).slice();
+  }
+  if (!editableTreadling) {
+    editableTreadling = Object.create(null);
+    for (let i = 1; i <= E; i++) editableTreadling[i] = (d.treadling[i] || []).slice();
+  }
+
+  // Apply editable structure to the working draft
+  d.threading = editableThreading;
+  if (!d.hasLiftplan) {
+    d.treadling = editableTreadling;
+    const tieup_ = d.tieup;
+    d.getRaisedShafts = (pickIdx) => {
+      const trs = editableTreadling[pickIdx] || [];
+      const s = new Set();
+      for (const tr of trs) for (const sh of (tieup_[tr] || [])) s.add(sh);
+      return s;
+    };
+  }
+
   // Cache state for hit-testing during painting
   paintDraft   = d;
   paintLblSize = lblSize;
@@ -806,6 +840,24 @@ function serializeWIF() {
   // ── Deep-copy all parsed sections so we don't mutate the live data ──────
   const secs = {};
   for (const [name, keys] of Object.entries(wifData)) secs[name] = { ...keys };
+
+  // ── Override threading/treadling with editable versions ──────────────
+  if (editableThreading) {
+    const th = Object.create(null);
+    for (let i = 1; i <= d.warpThreads; i++) {
+      const shafts = editableThreading[i] || [];
+      if (shafts.length > 0) th[String(i)] = shafts.join(',');
+    }
+    secs['THREADING'] = th;
+  }
+  if (editableTreadling && !d.hasLiftplan) {
+    const tr = Object.create(null);
+    for (let i = 1; i <= d.weftThreads; i++) {
+      const treadles = editableTreadling[i] || [];
+      if (treadles.length > 0) tr[String(i)] = treadles.join(',');
+    }
+    secs['TREADLING'] = tr;
+  }
 
   // ── Overwrite the four colour sections ────────────────────────────────
   secs['COLOR PALETTE'] = { ENTRIES: String(colorList.length), FORM: 'RGB', RANGE: '0,255' };
@@ -1455,6 +1507,7 @@ function setActiveColor(hex) {
     s.classList.toggle('selected', s.dataset.color === hex);
   });
   ['cThreading', 'cDrawdown', 'cTreadling'].forEach(id => {
+    if (structureEditMode && (id === 'cThreading' || id === 'cTreadling')) return;
     document.getElementById(id).style.cursor = 'crosshair';
   });
 }
@@ -1465,6 +1518,7 @@ function selectPaletteColor(el) {
     selectedColor = null;
     clearAllOverlays();
     ['cThreading', 'cDrawdown', 'cTreadling'].forEach(id => {
+      if (structureEditMode && (id === 'cThreading' || id === 'cTreadling')) return;
       document.getElementById(id).style.cursor = '';
     });
     return;
@@ -1504,7 +1558,17 @@ function sampleColor(canvasId, x, y) {
 // ── Undo ──────────────────────────────────────────────────────────────────
 
 function pushHistory() {
-  colorHistory.push({ warp: editableWarpColors.slice(), weft: editableWeftColors.slice() });
+  if (!editableWarpColors) return;
+  const snap = { warp: editableWarpColors.slice(), weft: editableWeftColors.slice() };
+  if (editableThreading) {
+    snap.threading = Object.create(null);
+    for (const [k, v] of Object.entries(editableThreading)) snap.threading[k] = v.slice();
+  }
+  if (editableTreadling) {
+    snap.treadling = Object.create(null);
+    for (const [k, v] of Object.entries(editableTreadling)) snap.treadling[k] = v.slice();
+  }
+  colorHistory.push(snap);
   if (colorHistory.length > 50) colorHistory.shift();
 }
 
@@ -1513,6 +1577,8 @@ function undo() {
   const prev = colorHistory.pop();
   editableWarpColors = prev.warp;
   editableWeftColors = prev.weft;
+  if (prev.threading) editableThreading = prev.threading;
+  if (prev.treadling) editableTreadling = prev.treadling;
   renderDraft();
 }
 
@@ -1617,6 +1683,100 @@ function commitPaint() {
   if (changed) renderDraft();
 }
 
+/* ═══════════════════════════════════════════════════
+   STRUCTURE EDITING (THREADING / TREADLING)
+═══════════════════════════════════════════════════ */
+
+function setStructureEditMode(enabled) {
+  structureEditMode = enabled;
+  const elT = document.getElementById('cThreading');
+  const elR = document.getElementById('cTreadling');
+  if (elT) elT.style.cursor = enabled ? 'pointer' : (selectedColor ? 'crosshair' : '');
+  if (elR) elR.style.cursor = enabled ? 'pointer' : (selectedColor ? 'crosshair' : '');
+  if (!enabled) {
+    clearOverlay('cThreading');
+    clearOverlay('cTreadling');
+  }
+}
+
+function handleStructureEdit(canvasId, x, y) {
+  if (!paintDraft || !editableThreading || !editableTreadling) return;
+  const d  = paintDraft;
+  const cs = cellSize;
+  const ls = paintLblSize;
+
+  if (canvasId === 'cThreading') {
+    if (ls > 0 && x < ls) return;
+    const col = Math.floor((x - ls) / cs);
+    const row = Math.floor(y / cs);
+    const S = d.shafts;
+    if (col < 0 || col >= d.warpThreads || row < 0 || row >= S) return;
+    const warpThread = col + 1;
+    const shaft = S - row;
+    pushHistory();
+    const existing = editableThreading[warpThread] || [];
+    if (existing.includes(shaft)) {
+      editableThreading[warpThread] = existing.filter(s => s !== shaft);
+    } else {
+      editableThreading[warpThread] = [shaft];
+    }
+  } else if (canvasId === 'cTreadling') {
+    const T = d.treadles;
+    const row = Math.floor(y / cs);
+    const col = Math.floor(x / cs);
+    if (row < 0 || row >= d.weftThreads || col < 0 || col >= T) return;
+    const weftPick = row + 1;
+    const treadle = col + 1;
+    pushHistory();
+    const existing = editableTreadling[weftPick] || [];
+    if (existing.includes(treadle)) {
+      editableTreadling[weftPick] = existing.filter(t => t !== treadle);
+    } else {
+      editableTreadling[weftPick] = [treadle];
+    }
+  } else {
+    return;
+  }
+  renderDraft();
+}
+
+function drawStructurePreview(canvasId, mouseX, mouseY) {
+  const ov = document.getElementById(canvasId + 'Ov');
+  if (!ov || !paintDraft) return;
+  const ctx = ov.getContext('2d');
+  ctx.clearRect(0, 0, ov.width, ov.height);
+  const cs = cellSize;
+  const d  = paintDraft;
+  const lw = 1.5;
+
+  if (canvasId === 'cThreading') {
+    const ls = paintLblSize;
+    if (ls > 0 && mouseX < ls) return;
+    const col = Math.floor((mouseX - ls) / cs);
+    const row = Math.floor(mouseY / cs);
+    if (col < 0 || col >= d.warpThreads || row < 0 || row >= d.shafts) return;
+    const isSet = (editableThreading[col + 1] || []).includes(d.shafts - row);
+    const x0 = ls + col * cs, y0 = row * cs;
+    ctx.fillStyle   = isSet ? 'rgba(220,60,60,0.3)' : 'rgba(80,220,130,0.3)';
+    ctx.fillRect(x0, y0, cs, cs);
+    ctx.strokeStyle = isSet ? 'rgba(255,80,80,0.9)' : 'rgba(80,255,140,0.9)';
+    ctx.lineWidth   = lw;
+    ctx.strokeRect(x0 + lw / 2, y0 + lw / 2, cs - lw, cs - lw);
+  } else if (canvasId === 'cTreadling') {
+    const T = d.treadles;
+    const row = Math.floor(mouseY / cs);
+    const col = Math.floor(mouseX / cs);
+    if (row < 0 || row >= d.weftThreads || col < 0 || col >= T) return;
+    const isSet = (editableTreadling[row + 1] || []).includes(col + 1);
+    const x0 = col * cs, y0 = row * cs;
+    ctx.fillStyle   = isSet ? 'rgba(220,60,60,0.3)' : 'rgba(80,220,130,0.3)';
+    ctx.fillRect(x0, y0, cs, cs);
+    ctx.strokeStyle = isSet ? 'rgba(255,80,80,0.9)' : 'rgba(80,255,140,0.9)';
+    ctx.lineWidth   = lw;
+    ctx.strokeRect(x0 + lw / 2, y0 + lw / 2, cs - lw, cs - lw);
+  }
+}
+
 // Canvas event wiring
 (function () {
   setupOverlays();
@@ -1646,7 +1806,16 @@ function commitPaint() {
     const el = document.getElementById(id);
 
     el.addEventListener('mousedown', e => {
-      if (eyedropperActive || !selectedColor || !paintDraft) return;
+      if (eyedropperActive) return;
+      // Structure edit mode intercepts threading/treadling clicks
+      if (structureEditMode && (id === 'cThreading' || id === 'cTreadling') && paintDraft) {
+        const { x, y } = canvasXY(el, e);
+        handleStructureEdit(id, x, y);
+        clearAllOverlays();
+        if (paintDraft) drawStructurePreview(id, x, y);
+        return;
+      }
+      if (!selectedColor || !paintDraft) return;
       isPainting     = true;
       paintingCanvas = el;
       const { x, y } = canvasXY(el, e);
@@ -1665,7 +1834,14 @@ function commitPaint() {
     });
 
     el.addEventListener('mousemove', e => {
-      if (!selectedColor || isPainting) return;
+      if (isPainting) return;
+      if (structureEditMode && (id === 'cThreading' || id === 'cTreadling') && paintDraft) {
+        const { x, y } = canvasXY(el, e);
+        clearAllOverlays();
+        drawStructurePreview(id, x, y);
+        return;
+      }
+      if (!selectedColor) return;
       const { x, y } = canvasXY(el, e);
       clearAllOverlays();
       drawPreview(id, x, y);
