@@ -1,4 +1,4 @@
-# Wifferalls - because WIFS for all!
+# Wifferalls - because are WIFS for all!
 
 A browser-based viewer and editor for **Weaving Information Files** (WIF 1.0 / 1.1). Open a `.wif` file, inspect the draft, edit thread colours and structure, and export a finished file — no installation or server required.
 
