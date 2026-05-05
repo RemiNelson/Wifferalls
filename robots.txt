@@ -2,52 +2,35 @@
 # robots.txt — with.threadlyintent.com
 # ============================================================
 
-# ── Well-behaved search engines ─────────────────────────────
+# ── Search engines ───────────────────────────────────────────
 
 User-agent: Googlebot
-Disallow: /admin/
-Disallow: /django-admin/
-Disallow: /search/
 Crawl-delay: 10
 
 User-agent: Bingbot
-Disallow: /admin/
-Disallow: /django-admin/
-Disallow: /search/
 Crawl-delay: 10
 
 User-agent: Slurp
-Disallow: /admin/
-Disallow: /django-admin/
-Disallow: /search/
 Crawl-delay: 10
 
 User-agent: DuckDuckBot
-Disallow: /admin/
-Disallow: /django-admin/
-Disallow: /search/
 Crawl-delay: 10
 
-# ── Social media link-preview bots ──────────────────────────
 
-# Facebook & Instagram (Open Graph / link card fetcher)
+# ── Social preview crawlers ──────────────────────────────────
+
 User-agent: facebookexternalhit
-Disallow: /admin/
-Disallow: /django-admin/
-Disallow: /search/
+User-agent: Twitterbot
+User-agent: LinkedInBot
+User-agent: Slackbot
+User-agent: Discordbot
+User-agent: TelegramBot
+User-agent: WhatsApp
+User-agent: Applebot
+User-agent: Pinterest
+User-agent: redditbot
+Allow: /
 
-# Bluesky (link card fetcher)
-User-agent: Bluesky
-Disallow: /admin/
-Disallow: /django-admin/
-Disallow: /search/
-
-# ── Internet Archive ─────────────────────────────────────────
-
-User-agent: ia_archiver
-Disallow: /admin/
-Disallow: /django-admin/
-Disallow: /search/
 
 # ── AI training crawlers ─────────────────────────────────────
 
@@ -84,11 +67,11 @@ Disallow: /
 User-agent: PerplexityBot
 Disallow: /
 
-# Meta
+# Meta AI
 User-agent: FacebookBot
 Disallow: /
 
-# Apple
+# Apple AI training
 User-agent: Applebot-Extended
 Disallow: /
 
@@ -112,14 +95,8 @@ Disallow: /
 User-agent: YouBot
 Disallow: /
 
-# ── Default: block everything else not listed above ──────────
+
+# ── Block everything else ────────────────────────────────────
 
 User-agent: *
-Disallow: /admin/
-Disallow: /django-admin/
-Disallow: /search/
-Crawl-delay: 10
-
-# ── Sitemap ──────────────────────────────────────────────────
-
-Sitemap: https://with.threadlyintent.com/sitemap.xml
+Disallow: /
