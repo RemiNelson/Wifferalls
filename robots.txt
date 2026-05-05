@@ -1,0 +1,125 @@
+# ============================================================
+# robots.txt — with.threadlyintent.com
+# ============================================================
+
+# ── Well-behaved search engines ─────────────────────────────
+
+User-agent: Googlebot
+Disallow: /admin/
+Disallow: /django-admin/
+Disallow: /search/
+Crawl-delay: 10
+
+User-agent: Bingbot
+Disallow: /admin/
+Disallow: /django-admin/
+Disallow: /search/
+Crawl-delay: 10
+
+User-agent: Slurp
+Disallow: /admin/
+Disallow: /django-admin/
+Disallow: /search/
+Crawl-delay: 10
+
+User-agent: DuckDuckBot
+Disallow: /admin/
+Disallow: /django-admin/
+Disallow: /search/
+Crawl-delay: 10
+
+# ── Social media link-preview bots ──────────────────────────
+
+# Facebook & Instagram (Open Graph / link card fetcher)
+User-agent: facebookexternalhit
+Disallow: /admin/
+Disallow: /django-admin/
+Disallow: /search/
+
+# Bluesky (link card fetcher)
+User-agent: Bluesky
+Disallow: /admin/
+Disallow: /django-admin/
+Disallow: /search/
+
+# ── Internet Archive ─────────────────────────────────────────
+
+User-agent: ia_archiver
+Disallow: /admin/
+Disallow: /django-admin/
+Disallow: /search/
+
+# ── AI training crawlers ─────────────────────────────────────
+
+# OpenAI
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: OAI-SearchBot
+Disallow: /
+
+# Google AI training
+User-agent: Google-Extended
+Disallow: /
+
+# Anthropic
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+# Common Crawl (primary source for many AI training datasets)
+User-agent: CCBot
+Disallow: /
+
+# Cohere
+User-agent: cohere-ai
+Disallow: /
+
+# Perplexity
+User-agent: PerplexityBot
+Disallow: /
+
+# Meta
+User-agent: FacebookBot
+Disallow: /
+
+# Apple
+User-agent: Applebot-Extended
+Disallow: /
+
+# ByteDance / TikTok
+User-agent: Bytespider
+Disallow: /
+
+# Diffbot
+User-agent: Diffbot
+Disallow: /
+
+# Amazon
+User-agent: Amazonbot
+Disallow: /
+
+# Timpi
+User-agent: Timpibot
+Disallow: /
+
+# YouBot
+User-agent: YouBot
+Disallow: /
+
+# ── Default: block everything else not listed above ──────────
+
+User-agent: *
+Disallow: /admin/
+Disallow: /django-admin/
+Disallow: /search/
+Crawl-delay: 10
+
+# ── Sitemap ──────────────────────────────────────────────────
+
+Sitemap: https://with.threadlyintent.com/sitemap.xml
