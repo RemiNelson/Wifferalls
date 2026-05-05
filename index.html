@@ -47,6 +47,7 @@
     <div class="section-label">Notes</div>
     <div class="notes-box" id="notesContent"></div>
   </div>
+  <div class="sticky-bar">
   <div id="paletteSection" style="display:none;">
     <div class="section-label">Color Palette</div>
     <div class="palette-tools">
@@ -78,7 +79,26 @@
       <input type="checkbox" id="editStructure" onchange="setStructureEditMode(this.checked)">
       Edit threading / treadling
     </label>
+    <div id="structEditControls" style="display:none; flex-basis:100%;">
+      <div class="struct-ctrl-group">
+        <span>Threading &mdash; Col:&nbsp;<span id="selThreadingCol" class="struct-sel-val">—</span></span>
+        <span class="struct-ctrl-div"></span>
+        <input type="number" id="threadingAddCount" value="1" min="1" max="999" class="count-input" onkeydown="if(event.key==='Enter')addThreadingColumns()" title="Columns to add">
+        <button class="btn btn-ghost btn-sm" onclick="addThreadingColumns()" title="Add columns after selected">+</button>
+        <input type="number" id="threadingRemoveCount" value="1" min="1" max="999" class="count-input" onkeydown="if(event.key==='Enter')removeThreadingColumns()" title="Columns to remove">
+        <button class="btn btn-ghost btn-sm" onclick="removeThreadingColumns()" title="Remove columns from selected">&minus;</button>
+      </div>
+      <div class="struct-ctrl-group" id="treadlingStructCtrl">
+        <span>Treadling &mdash; Row:&nbsp;<span id="selTreadlingRow" class="struct-sel-val">—</span></span>
+        <span class="struct-ctrl-div"></span>
+        <input type="number" id="treadlingAddCount" value="1" min="1" max="999" class="count-input" onkeydown="if(event.key==='Enter')addTreadlingRows()" title="Rows to add">
+        <button class="btn btn-ghost btn-sm" onclick="addTreadlingRows()" title="Add rows after selected">+</button>
+        <input type="number" id="treadlingRemoveCount" value="1" min="1" max="999" class="count-input" onkeydown="if(event.key==='Enter')removeTreadlingRows()" title="Rows to remove">
+        <button class="btn btn-ghost btn-sm" onclick="removeTreadlingRows()" title="Remove rows from selected">&minus;</button>
+      </div>
+    </div>
   </div>
+  </div><!-- /.sticky-bar -->
 
   <div class="draft-scroll">
     <div class="draft-outer">

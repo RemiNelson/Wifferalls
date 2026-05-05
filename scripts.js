@@ -28,9 +28,16 @@ let paintLblSize = 0;
 let printMode = false;
 
 // Editable threading/treadling structure (1-indexed)
-let editableThreading = null; // warpThread → [shafts]
-let editableTreadling = null; // weftPick → [treadles]
-let structureEditMode = false;
+let editableThreading  = null; // warpThread → [shafts]
+let editableTreadling  = null; // weftPick → [treadles]
+let editableWarpThreads = null; // overrides d.warpThreads when set
+let editableWeftThreads = null; // overrides d.weftThreads when set
+let structureEditMode  = false;
+
+// Structure add/remove state
+let selectedThreadingCol = null; // 1-based selected threading column
+let selectedTreadlingRow = null; // 1-based selected treadling row
+let suppressRemoveConfirm = false; // session flag: skip remove confirmation
 
 const dropZone  = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
@@ -82,11 +89,17 @@ function loadFile(file) {
 
 function resetApp() {
   wifData = null;
-  editableWarpColors = null;
-  editableWeftColors = null;
-  editableThreading = null;
-  editableTreadling = null;
-  structureEditMode = false;
+  editableWarpColors   = null;
+  editableWeftColors   = null;
+  editableThreading    = null;
+  editableTreadling    = null;
+  editableWarpThreads  = null;
+  editableWeftThreads  = null;
+  structureEditMode    = false;
+  selectedThreadingCol = null;
+  selectedTreadlingRow = null;
+  updateThreadingColDisplay();
+  updateTreadlingRowDisplay();
   selectedColor = null;
   paintDraft = null;
   colorHistory.length = 0;
@@ -453,8 +466,10 @@ function renderDraft() {
   const showGrid  = document.getElementById('showGrid').checked;
   const showLbls  = document.getElementById('showLabels').checked;
 
-  const W = d.warpThreads;
-  const E = d.weftThreads;
+  if (editableWarpThreads === null) editableWarpThreads = d.warpThreads;
+  if (editableWeftThreads === null) editableWeftThreads = d.weftThreads;
+  const W = editableWarpThreads;
+  const E = editableWeftThreads;
   const S = d.shafts;
   const T = d.hasLiftplan ? 0 : d.treadles;
 
@@ -491,8 +506,10 @@ function renderDraft() {
   }
 
   // Cache state for hit-testing during painting
-  paintDraft   = d;
-  paintLblSize = lblSize;
+  paintDraft             = d;
+  paintDraft.warpThreads = W;
+  paintDraft.weftThreads = E;
+  paintLblSize           = lblSize;
 
   // Canvas pixel dimensions (including optional label strips)
   // Threading: (W cols + label col) × S rows + label row
@@ -813,6 +830,8 @@ function serializeWIF() {
   if (!wifData || !editableWarpColors || !editableWeftColors) return null;
 
   const d = extractDraft();
+  const serialWarpThreads = editableWarpThreads ?? d.warpThreads;
+  const serialWeftThreads = editableWeftThreads ?? d.weftThreads;
 
   // ── Build a fresh colour palette from the edited thread colours ────────
   const colorMap  = new Map(); // '#rrggbb' → 1-based palette index
@@ -829,22 +848,28 @@ function serializeWIF() {
   }
 
   // Collect every thread colour so the palette is complete before we write
-  const warpPalIdx = new Array(d.warpThreads + 1);
-  for (let i = 1; i <= d.warpThreads; i++)
+  const warpPalIdx = new Array(serialWarpThreads + 1);
+  for (let i = 1; i <= serialWarpThreads; i++)
     warpPalIdx[i] = addColor(editableWarpColors[i] || d.warpDefaultColor);
 
-  const weftPalIdx = new Array(d.weftThreads + 1);
-  for (let i = 1; i <= d.weftThreads; i++)
+  const weftPalIdx = new Array(serialWeftThreads + 1);
+  for (let i = 1; i <= serialWeftThreads; i++)
     weftPalIdx[i] = addColor(editableWeftColors[i] || d.weftDefaultColor);
 
   // ── Deep-copy all parsed sections so we don't mutate the live data ──────
   const secs = {};
   for (const [name, keys] of Object.entries(wifData)) secs[name] = { ...keys };
 
+  // ── Update thread counts to reflect editable state ────────────────────
+  if (!secs['WARP']) secs['WARP'] = {};
+  if (!secs['WEFT']) secs['WEFT'] = {};
+  secs['WARP']['THREADS'] = String(serialWarpThreads);
+  secs['WEFT']['THREADS'] = String(serialWeftThreads);
+
   // ── Override threading/treadling with editable versions ──────────────
   if (editableThreading) {
     const th = Object.create(null);
-    for (let i = 1; i <= d.warpThreads; i++) {
+    for (let i = 1; i <= serialWarpThreads; i++) {
       const shafts = editableThreading[i] || [];
       if (shafts.length > 0) th[String(i)] = shafts.join(',');
     }
@@ -852,7 +877,7 @@ function serializeWIF() {
   }
   if (editableTreadling && !d.hasLiftplan) {
     const tr = Object.create(null);
-    for (let i = 1; i <= d.weftThreads; i++) {
+    for (let i = 1; i <= serialWeftThreads; i++) {
       const treadles = editableTreadling[i] || [];
       if (treadles.length > 0) tr[String(i)] = treadles.join(',');
     }
@@ -867,16 +892,16 @@ function serializeWIF() {
   secs['COLOR TABLE'] = ct;
 
   const wcSec = {};
-  for (let i = 1; i <= d.warpThreads; i++) wcSec[String(i)] = String(warpPalIdx[i]);
+  for (let i = 1; i <= serialWarpThreads; i++) wcSec[String(i)] = String(warpPalIdx[i]);
   secs['WARP COLORS'] = wcSec;
 
   const wfcSec = {};
-  for (let i = 1; i <= d.weftThreads; i++) wfcSec[String(i)] = String(weftPalIdx[i]);
+  for (let i = 1; i <= serialWeftThreads; i++) wfcSec[String(i)] = String(weftPalIdx[i]);
   secs['WEFT COLORS'] = wfcSec;
 
   // Update the default-colour pointer in [WARP] and [WEFT] if those keys exist
-  if (secs['WARP'] && d.warpThreads > 0) secs['WARP']['COLOR'] = String(warpPalIdx[1]);
-  if (secs['WEFT'] && d.weftThreads > 0) secs['WEFT']['COLOR'] = String(weftPalIdx[1]);
+  if (serialWarpThreads > 0) secs['WARP']['COLOR'] = String(warpPalIdx[1]);
+  if (serialWeftThreads > 0) secs['WEFT']['COLOR'] = String(weftPalIdx[1]);
 
   // If there is a [CONTENTS] section, make sure the colour sections are listed
   if (secs['CONTENTS']) {
@@ -1400,7 +1425,9 @@ function syncOverlaySize(id) {
 
 function clearOverlay(id) {
   const ov = document.getElementById(id + 'Ov');
-  if (ov) ov.getContext('2d').clearRect(0, 0, ov.width, ov.height);
+  if (!ov) return;
+  ov.getContext('2d').clearRect(0, 0, ov.width, ov.height);
+  if (structureEditMode) drawSelectionOnOverlay(id);
 }
 
 function clearAllOverlays() {
@@ -1559,7 +1586,12 @@ function sampleColor(canvasId, x, y) {
 
 function pushHistory() {
   if (!editableWarpColors) return;
-  const snap = { warp: editableWarpColors.slice(), weft: editableWeftColors.slice() };
+  const snap = {
+    warp: editableWarpColors.slice(),
+    weft: editableWeftColors.slice(),
+    warpThreads: editableWarpThreads,
+    weftThreads: editableWeftThreads,
+  };
   if (editableThreading) {
     snap.threading = Object.create(null);
     for (const [k, v] of Object.entries(editableThreading)) snap.threading[k] = v.slice();
@@ -1577,8 +1609,19 @@ function undo() {
   const prev = colorHistory.pop();
   editableWarpColors = prev.warp;
   editableWeftColors = prev.weft;
+  if (prev.warpThreads !== undefined) editableWarpThreads = prev.warpThreads;
+  if (prev.weftThreads !== undefined) editableWeftThreads = prev.weftThreads;
   if (prev.threading) editableThreading = prev.threading;
   if (prev.treadling) editableTreadling = prev.treadling;
+  // Clamp selections to restored thread counts
+  if (selectedThreadingCol !== null && editableWarpThreads !== null && selectedThreadingCol > editableWarpThreads) {
+    selectedThreadingCol = editableWarpThreads > 0 ? editableWarpThreads : null;
+    updateThreadingColDisplay();
+  }
+  if (selectedTreadlingRow !== null && editableWeftThreads !== null && selectedTreadlingRow > editableWeftThreads) {
+    selectedTreadlingRow = editableWeftThreads > 0 ? editableWeftThreads : null;
+    updateTreadlingRowDisplay();
+  }
   renderDraft();
 }
 
@@ -1693,7 +1736,26 @@ function setStructureEditMode(enabled) {
   const elR = document.getElementById('cTreadling');
   if (elT) elT.style.cursor = enabled ? 'pointer' : (selectedColor ? 'crosshair' : '');
   if (elR) elR.style.cursor = enabled ? 'pointer' : (selectedColor ? 'crosshair' : '');
-  if (!enabled) {
+
+  const ctrlEl = document.getElementById('structEditControls');
+  if (ctrlEl) ctrlEl.style.display = enabled ? 'flex' : 'none';
+
+  // Hide treadling controls when draft uses liftplan (no treadling panel)
+  const treadCtrl = document.getElementById('treadlingStructCtrl');
+  if (treadCtrl && enabled && paintDraft) treadCtrl.style.display = paintDraft.hasLiftplan ? 'none' : '';
+
+  if (enabled) {
+    if (selectedThreadingCol === null) selectedThreadingCol = 1;
+    if (selectedTreadlingRow === null) selectedTreadlingRow = 1;
+    updateThreadingColDisplay();
+    updateTreadlingRowDisplay();
+    clearOverlay('cThreading');
+    clearOverlay('cTreadling');
+  } else {
+    selectedThreadingCol = null;
+    selectedTreadlingRow = null;
+    updateThreadingColDisplay();
+    updateTreadlingRowDisplay();
     clearOverlay('cThreading');
     clearOverlay('cTreadling');
   }
@@ -1713,6 +1775,8 @@ function handleStructureEdit(canvasId, x, y) {
     if (col < 0 || col >= d.warpThreads || row < 0 || row >= S) return;
     const warpThread = col + 1;
     const shaft = S - row;
+    selectedThreadingCol = warpThread;
+    updateThreadingColDisplay();
     pushHistory();
     const existing = editableThreading[warpThread] || [];
     if (existing.includes(shaft)) {
@@ -1727,6 +1791,8 @@ function handleStructureEdit(canvasId, x, y) {
     if (row < 0 || row >= d.weftThreads || col < 0 || col >= T) return;
     const weftPick = row + 1;
     const treadle = col + 1;
+    selectedTreadlingRow = weftPick;
+    updateTreadlingRowDisplay();
     pushHistory();
     const existing = editableTreadling[weftPick] || [];
     if (existing.includes(treadle)) {
@@ -1745,6 +1811,7 @@ function drawStructurePreview(canvasId, mouseX, mouseY) {
   if (!ov || !paintDraft) return;
   const ctx = ov.getContext('2d');
   ctx.clearRect(0, 0, ov.width, ov.height);
+  drawSelectionOnOverlay(canvasId);
   const cs = cellSize;
   const d  = paintDraft;
   const lw = 1.5;
@@ -1775,6 +1842,222 @@ function drawStructurePreview(canvasId, mouseX, mouseY) {
     ctx.lineWidth   = lw;
     ctx.strokeRect(x0 + lw / 2, y0 + lw / 2, cs - lw, cs - lw);
   }
+}
+
+/* ═══════════════════════════════════════════════════
+   STRUCTURE ADD / REMOVE
+═══════════════════════════════════════════════════ */
+
+function drawSelectionOnOverlay(canvasId) {
+  if (!structureEditMode) return;
+  const ov = document.getElementById(canvasId + 'Ov');
+  if (!ov || !paintDraft) return;
+  const ctx = ov.getContext('2d');
+  const cs  = cellSize;
+  const lw  = 1.5;
+  if (canvasId === 'cThreading' && selectedThreadingCol !== null) {
+    const ls  = paintLblSize;
+    const col = selectedThreadingCol - 1;
+    if (col < 0 || col >= paintDraft.warpThreads) return;
+    ctx.fillStyle   = 'rgba(100,160,255,0.18)';
+    ctx.fillRect(ls + col * cs, 0, cs, ov.height);
+    ctx.strokeStyle = 'rgba(120,190,255,0.7)';
+    ctx.lineWidth   = lw;
+    ctx.strokeRect(ls + col * cs + lw / 2, lw / 2, cs - lw, ov.height - lw);
+  } else if (canvasId === 'cTreadling' && selectedTreadlingRow !== null) {
+    const row = selectedTreadlingRow - 1;
+    if (row < 0 || row >= paintDraft.weftThreads) return;
+    ctx.fillStyle   = 'rgba(100,160,255,0.18)';
+    ctx.fillRect(0, row * cs, ov.width, cs);
+    ctx.strokeStyle = 'rgba(120,190,255,0.7)';
+    ctx.lineWidth   = lw;
+    ctx.strokeRect(lw / 2, row * cs + lw / 2, ov.width - lw, cs - lw);
+  }
+}
+
+function updateThreadingColDisplay() {
+  const el = document.getElementById('selThreadingCol');
+  if (el) el.textContent = selectedThreadingCol !== null ? String(selectedThreadingCol) : '—';
+}
+
+function updateTreadlingRowDisplay() {
+  const el = document.getElementById('selTreadlingRow');
+  if (el) el.textContent = selectedTreadlingRow !== null ? String(selectedTreadlingRow) : '—';
+}
+
+function showRemoveConfirmDialog(what, fromPos, count) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:#1c1e2b;border:1px solid #2e3048;border-radius:12px;padding:1.5rem 1.75rem;max-width:360px;width:90%;font-family:system-ui,-apple-system,sans-serif;font-size:14px;color:#dde1f5;';
+    const label = count === 1
+      ? `1 ${what.replace(/s$/, '')} at position ${fromPos}`
+      : `${count} ${what} starting at position ${fromPos}`;
+    box.innerHTML = `
+      <h3 style="margin:0 0 0.5rem;font-size:0.95rem;font-weight:700;color:#e05c6e;">Confirm remove</h3>
+      <p style="margin:0 0 1rem;font-size:0.85rem;color:#7a7f9a;line-height:1.5;">Remove ${label}? This can be undone with Ctrl+Z.</p>
+      <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.8rem;color:#7a7f9a;margin-bottom:1.1rem;cursor:pointer;">
+        <input type="checkbox" id="noConfirmChk"> Don't ask again this session
+      </label>
+      <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
+        <button id="dlgCancel" style="background:transparent;border:1px solid #2e3048;border-radius:6px;padding:0.3rem 0.9rem;font-size:0.8rem;color:#7a7f9a;cursor:pointer;">Cancel</button>
+        <button id="dlgConfirm" style="background:#e05c6e;border:none;border-radius:6px;padding:0.3rem 0.9rem;font-size:0.8rem;font-weight:600;color:#fff;cursor:pointer;">Remove</button>
+      </div>
+    `;
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    const done = result => {
+      if (document.getElementById('noConfirmChk').checked) suppressRemoveConfirm = true;
+      document.body.removeChild(overlay);
+      resolve(result);
+    };
+    box.querySelector('#dlgConfirm').addEventListener('click', () => done(true));
+    box.querySelector('#dlgCancel').addEventListener('click',  () => done(false));
+    overlay.addEventListener('click', e => { if (e.target === overlay) done(false); });
+  });
+}
+
+function addThreadingColumns() {
+  if (selectedThreadingCol === null || !editableThreading || editableWarpThreads === null) return;
+  const count = Math.max(1, parseInt(document.getElementById('threadingAddCount').value) || 1);
+  const W     = editableWarpThreads;
+  const after = selectedThreadingCol;
+  const inheritColor = editableWarpColors[after] || (paintDraft && paintDraft.warpDefaultColor) || '#ffffff';
+
+  pushHistory();
+
+  const newThreading = Object.create(null);
+  const newColors    = [];
+  for (let i = 1; i <= after; i++) {
+    newThreading[i] = (editableThreading[i] || []).slice();
+    newColors[i]    = editableWarpColors[i];
+  }
+  for (let i = after + 1; i <= after + count; i++) {
+    newThreading[i] = [];
+    newColors[i]    = inheritColor;
+  }
+  for (let i = after + 1; i <= W; i++) {
+    newThreading[i + count] = (editableThreading[i] || []).slice();
+    newColors[i + count]    = editableWarpColors[i];
+  }
+
+  editableThreading    = newThreading;
+  editableWarpColors   = newColors;
+  editableWarpThreads  = W + count;
+  selectedThreadingCol = after + 1;
+  updateThreadingColDisplay();
+  renderDraft();
+}
+
+async function removeThreadingColumns() {
+  if (selectedThreadingCol === null || !editableThreading || editableWarpThreads === null) return;
+  const W     = editableWarpThreads;
+  const count = Math.max(1, Math.min(
+    parseInt(document.getElementById('threadingRemoveCount').value) || 1,
+    W - selectedThreadingCol + 1
+  ));
+  if (count <= 0) return;
+
+  if (!suppressRemoveConfirm) {
+    const ok = await showRemoveConfirmDialog('threading columns', selectedThreadingCol, count);
+    if (!ok) return;
+  }
+
+  pushHistory();
+
+  const from = selectedThreadingCol;
+  const newThreading = Object.create(null);
+  const newColors    = [];
+  for (let i = 1; i < from; i++) {
+    newThreading[i] = (editableThreading[i] || []).slice();
+    newColors[i]    = editableWarpColors[i];
+  }
+  for (let i = from + count; i <= W; i++) {
+    const j = i - count;
+    newThreading[j] = (editableThreading[i] || []).slice();
+    newColors[j]    = editableWarpColors[i];
+  }
+
+  editableThreading   = newThreading;
+  editableWarpColors  = newColors;
+  editableWarpThreads = W - count;
+  if (selectedThreadingCol > editableWarpThreads) {
+    selectedThreadingCol = editableWarpThreads > 0 ? editableWarpThreads : null;
+  }
+  updateThreadingColDisplay();
+  renderDraft();
+}
+
+function addTreadlingRows() {
+  if (selectedTreadlingRow === null || !editableTreadling || editableWeftThreads === null) return;
+  const count = Math.max(1, parseInt(document.getElementById('treadlingAddCount').value) || 1);
+  const E     = editableWeftThreads;
+  const after = selectedTreadlingRow;
+  const inheritColor = editableWeftColors[after] || (paintDraft && paintDraft.weftDefaultColor) || '#2c2c2c';
+
+  pushHistory();
+
+  const newTreadling = Object.create(null);
+  const newColors    = [];
+  for (let i = 1; i <= after; i++) {
+    newTreadling[i] = (editableTreadling[i] || []).slice();
+    newColors[i]    = editableWeftColors[i];
+  }
+  for (let i = after + 1; i <= after + count; i++) {
+    newTreadling[i] = [];
+    newColors[i]    = inheritColor;
+  }
+  for (let i = after + 1; i <= E; i++) {
+    newTreadling[i + count] = (editableTreadling[i] || []).slice();
+    newColors[i + count]    = editableWeftColors[i];
+  }
+
+  editableTreadling    = newTreadling;
+  editableWeftColors   = newColors;
+  editableWeftThreads  = E + count;
+  selectedTreadlingRow = after + 1;
+  updateTreadlingRowDisplay();
+  renderDraft();
+}
+
+async function removeTreadlingRows() {
+  if (selectedTreadlingRow === null || !editableTreadling || editableWeftThreads === null) return;
+  const E     = editableWeftThreads;
+  const count = Math.max(1, Math.min(
+    parseInt(document.getElementById('treadlingRemoveCount').value) || 1,
+    E - selectedTreadlingRow + 1
+  ));
+  if (count <= 0) return;
+
+  if (!suppressRemoveConfirm) {
+    const ok = await showRemoveConfirmDialog('treadling rows', selectedTreadlingRow, count);
+    if (!ok) return;
+  }
+
+  pushHistory();
+
+  const from = selectedTreadlingRow;
+  const newTreadling = Object.create(null);
+  const newColors    = [];
+  for (let i = 1; i < from; i++) {
+    newTreadling[i] = (editableTreadling[i] || []).slice();
+    newColors[i]    = editableWeftColors[i];
+  }
+  for (let i = from + count; i <= E; i++) {
+    const j = i - count;
+    newTreadling[j] = (editableTreadling[i] || []).slice();
+    newColors[j]    = editableWeftColors[i];
+  }
+
+  editableTreadling   = newTreadling;
+  editableWeftColors  = newColors;
+  editableWeftThreads = E - count;
+  if (selectedTreadlingRow > editableWeftThreads) {
+    selectedTreadlingRow = editableWeftThreads > 0 ? editableWeftThreads : null;
+  }
+  updateTreadlingRowDisplay();
+  renderDraft();
 }
 
 // Canvas event wiring
