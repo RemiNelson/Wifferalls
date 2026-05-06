@@ -22,12 +22,54 @@
 
 <!-- Upload screen -->
 <div id="uploadArea">
-  <div class="drop-zone" id="dropZone">
-    <div class="icon">🧵</div>
-    <h2>Open a WIF file</h2>
-    <p>Drag &amp; drop a .wif file here, or click below to browse</p>
-    <button class="btn" id="browseBtn">Choose File</button>
-    <input type="file" id="fileInput" accept=".wif,.WIF">
+  <div class="upload-options">
+    <div class="drop-zone" id="dropZone">
+      <div class="icon">🧵</div>
+      <h2>Open a WIF file</h2>
+      <p>Drag &amp; drop a .wif file here, or click below to browse</p>
+      <button class="btn" id="browseBtn">Choose File</button>
+      <input type="file" id="fileInput" accept=".wif,.WIF">
+    </div>
+    <div class="upload-divider"><span>or</span></div>
+    <div class="new-draft-panel">
+      <h2>New Draft</h2>
+      <p>Start from a blank canvas</p>
+      <form class="new-draft-form" onsubmit="event.preventDefault(); startNewDraft()">
+        <div class="nd-row">
+          <label class="nd-field">
+            <span class="nd-lbl">Ends (warp)</span>
+            <input type="number" id="ndEnds" min="1" max="9999" value="24" class="nd-input">
+          </label>
+          <label class="nd-field">
+            <span class="nd-lbl">Picks (weft)</span>
+            <input type="number" id="ndPicks" min="1" max="9999" value="24" class="nd-input">
+          </label>
+        </div>
+        <div class="nd-row">
+          <label class="nd-field">
+            <span class="nd-lbl">Shafts</span>
+            <input type="number" id="ndShafts" min="1" max="99" value="4" class="nd-input">
+          </label>
+          <label class="nd-field">
+            <span class="nd-lbl">Treadles</span>
+            <input type="number" id="ndTreadles" min="1" max="99" value="6" class="nd-input">
+          </label>
+        </div>
+        <label class="nd-field" style="width:100%;max-width:none;">
+          <span class="nd-lbl">Starting pattern</span>
+          <select id="ndPattern" class="nd-input">
+            <option value="blank">Blank</option>
+            <option value="plainweave">Plain weave</option>
+            <option value="twill">Twill</option>
+          </select>
+        </label>
+        <label class="nd-checkbox-row">
+          <input type="checkbox" id="ndRisingShed" checked>
+          <span class="nd-lbl">Rising shed</span>
+        </label>
+        <button class="btn" type="submit">Create Draft</button>
+      </form>
+    </div>
   </div>
 </div>
 
@@ -50,7 +92,7 @@
   <div id="metaSection"></div>
   <div id="notesSection" style="display:none;">
     <div class="section-label">Notes</div>
-    <div class="notes-box" id="notesContent"></div>
+    <textarea class="notes-box" id="notesContent" placeholder="Add notes about this draft..."></textarea>
   </div>
   <div class="sticky-bar">
   <div id="paletteSection" style="display:none;">

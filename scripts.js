@@ -27,9 +27,13 @@ let paintLblSize = 0;
 // When true, renderDraft uses a white background (for PDF export)
 let printMode = false;
 
-// Editable threading/treadling structure (1-indexed)
+// Editable metadata (text fields + rising shed)
+let editableMeta = null; // { title, author, email, notes, risingShed }
+
+// Editable threading/treadling/tieup structure (1-indexed)
 let editableThreading  = null; // warpThread → [shafts]
 let editableTreadling  = null; // weftPick → [treadles]
+let editableTieup      = null; // treadle → [shafts]
 let editableWarpThreads = null; // overrides d.warpThreads when set
 let editableWeftThreads = null; // overrides d.weftThreads when set
 let structureEditMode  = false;
@@ -89,10 +93,12 @@ function loadFile(file) {
 
 function resetApp() {
   wifData = null;
+  editableMeta         = null;
   editableWarpColors   = null;
   editableWeftColors   = null;
   editableThreading    = null;
   editableTreadling    = null;
+  editableTieup        = null;
   editableWarpThreads  = null;
   editableWeftThreads  = null;
   structureEditMode    = false;
@@ -114,6 +120,86 @@ function resetApp() {
   document.querySelectorAll('.swatch').forEach(s => s.classList.remove('selected'));
   const eyeBtn = document.getElementById('eyedropperBtn');
   if (eyeBtn) eyeBtn.classList.remove('active');
+}
+
+function startNewDraft() {
+  const ends       = Math.max(1, parseInt(document.getElementById('ndEnds').value)     || 24);
+  const picks      = Math.max(1, parseInt(document.getElementById('ndPicks').value)    || 24);
+  const shafts     = Math.max(1, parseInt(document.getElementById('ndShafts').value)   || 4);
+  const treadles   = Math.max(1, parseInt(document.getElementById('ndTreadles').value) || 6);
+  const risingShed = document.getElementById('ndRisingShed').checked;
+  const pattern    = document.getElementById('ndPattern').value;
+
+  editableMeta = { title: '', author: '', notes: '', risingShed };
+
+  wifData = Object.create(null);
+  wifData['WIF']           = { 'VERSION': '1.1' };
+  wifData['WEAVING']       = { 'SHAFTS': String(shafts), 'TREADLES': String(treadles), 'RISING SHED': risingShed ? 'true' : 'false' };
+  wifData['WARP']          = { 'THREADS': String(ends),  'COLOR': '1' };
+  wifData['WEFT']          = { 'THREADS': String(picks), 'COLOR': '2' };
+  wifData['COLOR PALETTE'] = { 'ENTRIES': '10', 'FORM': 'RGB', 'RANGE': '0,255' };
+  wifData['COLOR TABLE']   = {
+    '1':  '255,255,255',
+    '2':  '28,28,32',
+    '3':  '210,40,40',
+    '4':  '220,110,20',
+    '5':  '210,185,15',
+    '6':  '70,175,55',
+    '7':  '20,155,150',
+    '8':  '40,80,200',
+    '9':  '110,40,185',
+    '10': '205,40,130',
+  };
+  wifData['WARP COLORS']   = Object.create(null);
+  wifData['WEFT COLORS']   = Object.create(null);
+
+  const threading = Object.create(null);
+  const tieup     = Object.create(null);
+  const treadling = Object.create(null);
+
+  if (pattern === 'plainweave') {
+    for (let i = 1; i <= ends; i++)  threading[i] = String(((i - 1) % 2) + 1);
+    tieup[1] = '1'; tieup[2] = '2';
+    for (let i = 1; i <= picks; i++) treadling[i] = String(((i - 1) % 2) + 1);
+  } else if (pattern === 'twill') {
+    const floats = Math.max(1, Math.floor(shafts / 2));
+    for (let i = 1; i <= ends; i++)  threading[i] = String(((i - 1) % shafts) + 1);
+    for (let t = 1; t <= treadles; t++) {
+      const raised = [];
+      for (let f = 0; f < floats; f++) raised.push(((t - 1 + f) % shafts) + 1);
+      tieup[t] = raised.join(',');
+    }
+    for (let i = 1; i <= picks; i++) treadling[i] = String(((i - 1) % treadles) + 1);
+  }
+
+  wifData['THREADING']     = threading;
+  wifData['TIEUP']         = tieup;
+  wifData['TREADLING']     = treadling;
+
+  document.getElementById('fileName').textContent = 'New Draft';
+  document.getElementById('fileSize').textContent = '';
+  document.getElementById('uploadArea').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('errorBox').style.display = 'none';
+  editableWarpColors  = null;
+  editableWeftColors  = null;
+  colorHistory.length = 0;
+  buildMeta();
+  document.getElementById('paletteSection').style.display = 'block';
+  const autoCs = computeAutoFitCellSize();
+  cellSize = autoCs;
+  const range = document.getElementById('cellSizeRange');
+  range.min   = 2;
+  range.max   = Math.max(32, autoCs);
+  range.value = autoCs;
+  document.getElementById('cellSizeLbl').textContent = autoCs + 'px';
+  renderDraft();
+  const editStructureCheck = document.getElementById('editStructure');
+  if (editStructureCheck) {
+    const enableEdit = pattern === 'blank';
+    editStructureCheck.checked = enableEdit;
+    setStructureEditMode(enableEdit);
+  }
 }
 
 function showError(msg) {
@@ -357,50 +443,75 @@ function extractDraft() {
 ═══════════════════════════════════════════════════ */
 
 function buildMeta() {
-  const textSec    = getSection('TEXT');
   const weavingSec = getSection('WEAVING');
   const warpSec    = getSection('WARP');
   const weftSec    = getSection('WEFT');
   const wifSec     = getSection('WIF');
 
-  const rawTitle = textSec['TITLE'];
-  const title = rawTitle ? rawTitle.replace(/\/\//g, ' / ') : rawTitle;
+  // Seed editable metadata on first call after file load (startNewDraft sets it directly)
+  if (!editableMeta) {
+    const textSec  = getSection('TEXT');
+    const notesSec = getSection('NOTES');
+    const noteKeys = Object.keys(notesSec)
+      .map(k => parseInt(k, 10)).filter(n => !isNaN(n)).sort((a, b) => a - b);
+    editableMeta = {
+      title:      textSec['TITLE']  || '',
+      author:     textSec['AUTHOR'] || '',
+      notes:      noteKeys.map(k => notesSec[String(k)]).join('\n'),
+      risingShed: parseBool(weavingSec['RISING SHED']),
+    };
+  }
 
-  const fields = [
-    ['Title',       title],
-    ['Author',      textSec['AUTHOR']],
-    ['Email',       textSec['EMAIL']],
-    ['Software',    wifSec['SOURCE PROGRAM']],
-    ['Shafts',      weavingSec['SHAFTS']    ? parseIntVal(weavingSec['SHAFTS'])    : null],
-    ['Treadles',    weavingSec['TREADLES']  ? parseIntVal(weavingSec['TREADLES'])  : null],
-    ['Warp ends',   warpSec['THREADS']      ? parseIntVal(warpSec['THREADS'])      : null],
-    ['Weft picks',  weftSec['THREADS']      ? parseIntVal(weftSec['THREADS'])      : null],
-    ['Rising shed', weavingSec['RISING SHED'] !== undefined
-                      ? (parseBool(weavingSec['RISING SHED']) ? 'Yes' : 'No') : null],
-  ];
+  // Structural info cards (read-only — changed through structure editing)
+  const structCards = [
+    ['Shafts',    weavingSec['SHAFTS']    ? parseIntVal(weavingSec['SHAFTS'])    : null],
+    ['Treadles',  weavingSec['TREADLES']  ? parseIntVal(weavingSec['TREADLES'])  : null],
+    ['Warp ends', warpSec['THREADS']      ? parseIntVal(warpSec['THREADS'])      : null],
+    ['Weft picks',weftSec['THREADS']      ? parseIntVal(weftSec['THREADS'])      : null],
+    ['Software',  wifSec['SOURCE PROGRAM'] || null],
+  ].filter(([, v]) => v !== null && v !== undefined && v !== '');
 
-  const cardsHtml = fields
-    .filter(([, v]) => v !== null && v !== undefined && v !== '')
-    .map(([l, v]) => `
-      <div class="info-card">
-        <div class="lbl">${l}</div>
-        <div class="val">${escHtml(String(v))}</div>
-      </div>`)
-    .join('');
+  const cardsHtml = structCards.map(([l, v]) =>
+    `<div class="info-card"><div class="lbl">${escHtml(String(l))}</div><div class="val">${escHtml(String(v))}</div></div>`
+  ).join('');
 
-  document.getElementById('metaSection').innerHTML =
-    `<div class="section-label">Draft Information</div>
-     <div class="info-grid">${cardsHtml}</div>`;
+  const rsChecked = editableMeta.risingShed ? ' checked' : '';
+  const rsLabel   = editableMeta.risingShed ? 'Yes' : 'No';
+
+  document.getElementById('metaSection').innerHTML = `
+    <div class="section-label">Draft Information</div>
+    <div class="meta-text-row">
+      <label class="meta-field">
+        <span class="meta-lbl">Title</span>
+        <input type="text" id="metaTitle" class="meta-input" placeholder="Draft title" value="${escAttr(editableMeta.title)}">
+      </label>
+      <label class="meta-field">
+        <span class="meta-lbl">Author</span>
+        <input type="text" id="metaAuthor" class="meta-input" placeholder="Author" value="${escAttr(editableMeta.author)}">
+      </label>
+    </div>
+    <div class="info-grid">
+      ${cardsHtml}
+      <label class="info-card meta-rising-shed" title="Rising shed: raised shafts bring warp threads to the top">
+        <div class="lbl">Rising shed</div>
+        <div class="val meta-rs-val">
+          <input type="checkbox" id="metaRisingShed"${rsChecked} onchange="onRisingShedChange(this.checked)">
+          <span id="risingShedLbl">${rsLabel}</span>
+        </div>
+      </label>
+    </div>`;
+
+  // Bind text field changes (elements are freshly created via innerHTML above)
+  const metaFields = { metaTitle: 'title', metaAuthor: 'author' };
+  for (const [id, key] of Object.entries(metaFields)) {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', () => { editableMeta[key] = el.value; });
+  }
 
   // Notes
-  const notesSec = getSection('NOTES');
-  const noteKeys = Object.keys(notesSec)
-    .map(k => parseInt(k, 10)).filter(n => !isNaN(n)).sort((a, b) => a - b);
-  if (noteKeys.length) {
-    const txt = noteKeys.map(k => notesSec[String(k)]).join('\n');
-    document.getElementById('notesContent').textContent = txt;
-    document.getElementById('notesSection').style.display = 'block';
-  }
+  const notesEl = document.getElementById('notesContent');
+  if (notesEl) notesEl.value = editableMeta.notes;
+  document.getElementById('notesSection').style.display = 'block';
 
   // Color swatches
   const colorPalSec   = getSection('COLOR PALETTE');
@@ -462,6 +573,7 @@ function renderDraft() {
   if (!wifData) return;
 
   const d         = extractDraft();
+  if (editableMeta) d.risingShed = editableMeta.risingShed;
   const cs        = cellSize;
   const showGrid  = document.getElementById('showGrid').checked;
   const showLbls  = document.getElementById('showLabels').checked;
@@ -491,16 +603,20 @@ function renderDraft() {
     editableTreadling = Object.create(null);
     for (let i = 1; i <= E; i++) editableTreadling[i] = (d.treadling[i] || []).slice();
   }
+  if (!editableTieup) {
+    editableTieup = Object.create(null);
+    for (let t = 1; t <= d.treadles; t++) editableTieup[t] = (d.tieup[t] || []).slice();
+  }
 
   // Apply editable structure to the working draft
   d.threading = editableThreading;
   if (!d.hasLiftplan) {
+    d.tieup     = editableTieup;
     d.treadling = editableTreadling;
-    const tieup_ = d.tieup;
     d.getRaisedShafts = (pickIdx) => {
       const trs = editableTreadling[pickIdx] || [];
       const s = new Set();
-      for (const tr of trs) for (const sh of (tieup_[tr] || [])) s.add(sh);
+      for (const tr of trs) for (const sh of (editableTieup[tr] || [])) s.add(sh);
       return s;
     };
   }
@@ -542,6 +658,7 @@ function renderDraft() {
   const dCtx = prep('cDrawdown',  drawdownW,  drawdownH);
   const rCtx = prep('cTreadling', treadlingW, treadlingH);
   syncOverlaySize('cThreading');
+  syncOverlaySize('cTieup');
   syncOverlaySize('cDrawdown');
   syncOverlaySize('cTreadling');
 
@@ -822,6 +939,18 @@ function escHtml(s) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function escAttr(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+}
+
+function onRisingShedChange(checked) {
+  if (!editableMeta) return;
+  editableMeta.risingShed = checked;
+  const lbl = document.getElementById('risingShedLbl');
+  if (lbl) lbl.textContent = checked ? 'Yes' : 'No';
+  renderDraft();
+}
+
 /* ═══════════════════════════════════════════════════
    WIF EXPORT
 ═══════════════════════════════════════════════════ */
@@ -860,6 +989,35 @@ function serializeWIF() {
   const secs = {};
   for (const [name, keys] of Object.entries(wifData)) secs[name] = { ...keys };
 
+  // ── Stamp authoring metadata ──────────────────────────────────────────
+  if (!secs['WIF']) secs['WIF'] = {};
+  secs['WIF']['SOURCE PROGRAM'] = 'Wifferalls';
+  secs['WIF']['SOURCE VERSION'] = '1.0';
+  secs['WIF']['DEVELOPERS']     = 'ThreadlyIntent';
+  secs['WIF']['DATE']           = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  // ── Apply editable metadata ───────────────────────────────────────────
+  if (editableMeta) {
+    if (!secs['TEXT']) secs['TEXT'] = {};
+    if (editableMeta.title)  secs['TEXT']['TITLE']  = editableMeta.title;
+    else                     delete secs['TEXT']['TITLE'];
+    if (editableMeta.author) secs['TEXT']['AUTHOR'] = editableMeta.author;
+    else                     delete secs['TEXT']['AUTHOR'];
+    delete secs['TEXT']['EMAIL'];
+
+    if (!secs['WEAVING']) secs['WEAVING'] = {};
+    secs['WEAVING']['RISING SHED'] = editableMeta.risingShed ? 'true' : 'false';
+
+    if (editableMeta.notes.trim()) {
+      const noteLines = editableMeta.notes.split('\n');
+      const notesSec  = {};
+      noteLines.forEach((line, i) => { notesSec[String(i + 1)] = line; });
+      secs['NOTES'] = notesSec;
+    } else {
+      delete secs['NOTES'];
+    }
+  }
+
   // ── Update thread counts to reflect editable state ────────────────────
   if (!secs['WARP']) secs['WARP'] = {};
   if (!secs['WEFT']) secs['WEFT'] = {};
@@ -883,6 +1041,14 @@ function serializeWIF() {
     }
     secs['TREADLING'] = tr;
   }
+  if (editableTieup && !d.hasLiftplan) {
+    const tuSec = Object.create(null);
+    for (let t = 1; t <= d.treadles; t++) {
+      const sh = editableTieup[t] || [];
+      if (sh.length > 0) tuSec[String(t)] = sh.join(',');
+    }
+    secs['TIEUP'] = tuSec;
+  }
 
   // ── Overwrite the four colour sections ────────────────────────────────
   secs['COLOR PALETTE'] = { ENTRIES: String(colorList.length), FORM: 'RGB', RANGE: '0,255' };
@@ -903,13 +1069,41 @@ function serializeWIF() {
   if (serialWarpThreads > 0) secs['WARP']['COLOR'] = String(warpPalIdx[1]);
   if (serialWeftThreads > 0) secs['WEFT']['COLOR'] = String(weftPalIdx[1]);
 
-  // If there is a [CONTENTS] section, make sure the colour sections are listed
-  if (secs['CONTENTS']) {
-    secs['CONTENTS']['COLOR PALETTE'] = 'true';
-    secs['CONTENTS']['COLOR TABLE']   = 'true';
-    secs['CONTENTS']['WARP COLORS']   = 'true';
-    secs['CONTENTS']['WEFT COLORS']   = 'true';
+  // ── WEAVING computed fields ───────────────────────────────────────────
+  if (!secs['WEAVING']) secs['WEAVING'] = {};
+  secs['WEAVING']['INTERLACEMENT'] = d.hasLiftplan ? 'Liftplan' : 'Straight';
+
+  const thSec = secs['THREADING'] || {};
+  const shaftEndCount = {};
+  for (const v of Object.values(thSec)) {
+    for (const sh of String(v).split(',').map(s => s.trim()).filter(Boolean)) {
+      shaftEndCount[sh] = (shaftEndCount[sh] || 0) + 1;
+    }
   }
+  const maxEnds = Object.values(shaftEndCount).reduce((m, n) => Math.max(m, n), 0);
+  if (maxEnds > 0) secs['WEAVING']['MAX ENDS'] = String(maxEnds);
+
+  const trSec = secs['TREADLING'] || {};
+  const treadlePickCount = {};
+  for (const v of Object.values(trSec)) {
+    for (const tr of String(v).split(',').map(s => s.trim()).filter(Boolean)) {
+      treadlePickCount[tr] = (treadlePickCount[tr] || 0) + 1;
+    }
+  }
+  const maxPicks = Object.values(treadlePickCount).reduce((m, n) => Math.max(m, n), 0);
+  if (maxPicks > 0) secs['WEAVING']['MAX PICKS'] = String(maxPicks);
+
+  // ── CONTENTS section — auto-generated from present sections ──────────
+  const contentsSec = {};
+  const contentsCandidates = [
+    'TEXT', 'WEAVING', 'WARP', 'WEFT',
+    'COLOR PALETTE', 'COLOR TABLE', 'WARP COLORS', 'WEFT COLORS',
+    'THREADING', 'TIEUP', 'TREADLING', 'LIFTPLAN', 'NOTES',
+  ];
+  for (const name of contentsCandidates) {
+    if (secs[name] && Object.keys(secs[name]).length > 0) contentsSec[name] = 'true';
+  }
+  secs['CONTENTS'] = contentsSec;
 
   // ── Serialise sections in canonical WIF order ─────────────────────────
   const ORDER = [
@@ -939,17 +1133,21 @@ function serializeWIF() {
   return out;
 }
 
+function getExportBasename() {
+  const title = editableMeta?.title?.trim();
+  if (title) return title.replace(/[/\\:*?"<>|]/g, '-').trim();
+  return (document.getElementById('fileName').textContent || 'draft').replace(/\.wif$/i, '');
+}
+
 function exportWIF() {
   if (!wifData || !editableWarpColors) return;
   const text = serializeWIF();
   if (!text) return;
-  const base = (document.getElementById('fileName').textContent || 'draft')
-    .replace(/\.wif$/i, '');
   const blob = new Blob([text], { type: 'text/plain' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
-  a.download = base + '_edited.wif';
+  a.download = getExportBasename() + '.wif';
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -1095,21 +1293,16 @@ async function exportPDF() {
   if (!window.jspdf) { showError('PDF export requires the jsPDF library (needs internet connection on first load).'); return; }
 
   // ── Shared metadata ───────────────────────────────────────────────────────
-  const filename   = document.getElementById('fileName').textContent;
-  const base       = filename.replace(/\.wif$/i, '');
-  const textSec    = getSection('TEXT');
-  const weavingSec = getSection('WEAVING');
-  const warpSec    = getSection('WARP');
-  const weftSec    = getSection('WEFT');
+  const base     = getExportBasename();
+  const filename = base;
   const meta = [
-    ['Title',       textSec['TITLE'] ? textSec['TITLE'].replace(/\/\//g, ' / ') : textSec['TITLE']],
-    ['Author',      textSec['AUTHOR']],
-    ['Shafts',      weavingSec['SHAFTS']   ? String(parseIntVal(weavingSec['SHAFTS']))   : null],
-    ['Treadles',    weavingSec['TREADLES'] ? String(parseIntVal(weavingSec['TREADLES'])) : null],
-    ['Warp ends',   warpSec['THREADS']     ? String(parseIntVal(warpSec['THREADS']))     : null],
-    ['Weft picks',  weftSec['THREADS']     ? String(parseIntVal(weftSec['THREADS']))     : null],
-    ['Rising shed', weavingSec['RISING SHED'] !== undefined
-                      ? (parseBool(weavingSec['RISING SHED']) ? 'Yes' : 'No') : null],
+    ['Title',       editableMeta?.title  ? editableMeta.title.replace(/\/\//g, ' / ')  : null],
+    ['Author',      editableMeta?.author || null],
+    ['Shafts',      String(d.shafts)],
+    ['Treadles',    String(d.treadles)],
+    ['Warp ends',   String(d.warpThreads)],
+    ['Weft picks',  String(d.weftThreads)],
+    ['Rising shed', editableMeta ? (editableMeta.risingShed ? 'Yes' : 'No') : null],
   ].filter(([, v]) => v != null && v !== '');
 
   const colorSet = new Set();
@@ -1117,9 +1310,8 @@ async function exportPDF() {
   if (editableWarpColors) for (let i = 1; i < editableWarpColors.length; i++) addC(editableWarpColors[i]);
   if (editableWeftColors) for (let i = 1; i < editableWeftColors.length; i++) addC(editableWeftColors[i]);
 
-  const notesEl   = document.getElementById('notesSection');
-  const hasNotes  = notesEl.style.display !== 'none';
-  const notesText = hasNotes ? document.getElementById('notesContent').textContent : '';
+  const notesText = editableMeta?.notes.trim() ?? '';
+  const hasNotes  = notesText.length > 0;
 
   const { jsPDF } = window.jspdf;
   const ML = 15, CW = 267, PAGE_H = 210, BMARGIN = 15;
@@ -1398,7 +1590,7 @@ async function exportPDF() {
 // ── Overlay canvases (positioned on top of each painting canvas) ──────────
 
 function setupOverlays() {
-  ['cThreading', 'cDrawdown', 'cTreadling'].forEach(id => {
+  ['cThreading', 'cTieup', 'cDrawdown', 'cTreadling'].forEach(id => {
     const main = document.getElementById(id);
     // Wrap the canvas itself so the overlay aligns with the canvas,
     // not with the panel-wrap (which may include a label above the canvas).
@@ -1432,6 +1624,7 @@ function clearOverlay(id) {
 
 function clearAllOverlays() {
   clearOverlay('cThreading');
+  clearOverlay('cTieup');
   clearOverlay('cDrawdown');
   clearOverlay('cTreadling');
 }
@@ -1600,6 +1793,10 @@ function pushHistory() {
     snap.treadling = Object.create(null);
     for (const [k, v] of Object.entries(editableTreadling)) snap.treadling[k] = v.slice();
   }
+  if (editableTieup) {
+    snap.tieup = Object.create(null);
+    for (const [k, v] of Object.entries(editableTieup)) snap.tieup[k] = v.slice();
+  }
   colorHistory.push(snap);
   if (colorHistory.length > 50) colorHistory.shift();
 }
@@ -1613,6 +1810,7 @@ function undo() {
   if (prev.weftThreads !== undefined) editableWeftThreads = prev.weftThreads;
   if (prev.threading) editableThreading = prev.threading;
   if (prev.treadling) editableTreadling = prev.treadling;
+  if (prev.tieup)     editableTieup     = prev.tieup;
   // Clamp selections to restored thread counts
   if (selectedThreadingCol !== null && editableWarpThreads !== null && selectedThreadingCol > editableWarpThreads) {
     selectedThreadingCol = editableWarpThreads > 0 ? editableWarpThreads : null;
@@ -1734,8 +1932,10 @@ function setStructureEditMode(enabled) {
   structureEditMode = enabled;
   const elT = document.getElementById('cThreading');
   const elR = document.getElementById('cTreadling');
+  const elU = document.getElementById('cTieup');
   if (elT) elT.style.cursor = enabled ? 'pointer' : (selectedColor ? 'crosshair' : '');
   if (elR) elR.style.cursor = enabled ? 'pointer' : (selectedColor ? 'crosshair' : '');
+  if (elU) elU.style.cursor = enabled ? 'pointer' : '';
 
   const ctrlEl = document.getElementById('structEditControls');
   if (ctrlEl) ctrlEl.style.display = enabled ? 'flex' : 'none';
@@ -1762,7 +1962,7 @@ function setStructureEditMode(enabled) {
 }
 
 function handleStructureEdit(canvasId, x, y) {
-  if (!paintDraft || !editableThreading || !editableTreadling) return;
+  if (!paintDraft || !editableThreading || !editableTreadling || !editableTieup) return;
   const d  = paintDraft;
   const cs = cellSize;
   const ls = paintLblSize;
@@ -1783,6 +1983,7 @@ function handleStructureEdit(canvasId, x, y) {
       editableThreading[warpThread] = existing.filter(s => s !== shaft);
     } else {
       editableThreading[warpThread] = [shaft];
+      if (selectedColor) editableWarpColors[warpThread] = selectedColor;
     }
   } else if (canvasId === 'cTreadling') {
     const T = d.treadles;
@@ -1799,6 +2000,22 @@ function handleStructureEdit(canvasId, x, y) {
       editableTreadling[weftPick] = existing.filter(t => t !== treadle);
     } else {
       editableTreadling[weftPick] = [treadle];
+      if (selectedColor) editableWeftColors[weftPick] = selectedColor;
+    }
+  } else if (canvasId === 'cTieup') {
+    const S = d.shafts;
+    const T = d.treadles;
+    const col = Math.floor(x / cs);
+    const row = Math.floor(y / cs);
+    if (col < 0 || col >= T || row < 0 || row >= S) return;
+    const treadle = col + 1;
+    const shaft   = S - row;
+    pushHistory();
+    const existing = editableTieup[treadle] || [];
+    if (existing.includes(shaft)) {
+      editableTieup[treadle] = existing.filter(s => s !== shaft);
+    } else {
+      editableTieup[treadle] = [...existing, shaft];
     }
   } else {
     return;
@@ -1816,6 +2033,8 @@ function drawStructurePreview(canvasId, mouseX, mouseY) {
   const d  = paintDraft;
   const lw = 1.5;
 
+  const clamp = v => Math.min(255, Math.max(0, Math.round(v)));
+
   if (canvasId === 'cThreading') {
     const ls = paintLblSize;
     if (ls > 0 && mouseX < ls) return;
@@ -1824,17 +2043,50 @@ function drawStructurePreview(canvasId, mouseX, mouseY) {
     if (col < 0 || col >= d.warpThreads || row < 0 || row >= d.shafts) return;
     const isSet = (editableThreading[col + 1] || []).includes(d.shafts - row);
     const x0 = ls + col * cs, y0 = row * cs;
-    ctx.fillStyle   = isSet ? 'rgba(220,60,60,0.3)' : 'rgba(80,220,130,0.3)';
-    ctx.fillRect(x0, y0, cs, cs);
-    ctx.strokeStyle = isSet ? 'rgba(255,80,80,0.9)' : 'rgba(80,255,140,0.9)';
-    ctx.lineWidth   = lw;
-    ctx.strokeRect(x0 + lw / 2, y0 + lw / 2, cs - lw, cs - lw);
+    if (!isSet && selectedColor) {
+      // Draw a thread dot in the selected colour
+      const [r, g, b] = parseRGB(selectedColor);
+      const cx = x0 + cs / 2, cy = y0 + cs / 2, rad = cs * 0.42;
+      const rg = ctx.createRadialGradient(cx - rad * 0.3, cy - rad * 0.3, 0, cx, cy, rad);
+      rg.addColorStop(0,   `rgba(${clamp(r*1.6)},${clamp(g*1.6)},${clamp(b*1.6)},0.9)`);
+      rg.addColorStop(0.5, `rgba(${r},${g},${b},0.9)`);
+      rg.addColorStop(1,   `rgba(${clamp(r*.35)},${clamp(g*.35)},${clamp(b*.35)},0.9)`);
+      ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+      ctx.fillStyle = rg; ctx.fill();
+    } else {
+      ctx.fillStyle   = isSet ? 'rgba(220,60,60,0.3)' : 'rgba(80,220,130,0.3)';
+      ctx.fillRect(x0, y0, cs, cs);
+      ctx.strokeStyle = isSet ? 'rgba(255,80,80,0.9)' : 'rgba(80,255,140,0.9)';
+      ctx.lineWidth   = lw;
+      ctx.strokeRect(x0 + lw / 2, y0 + lw / 2, cs - lw, cs - lw);
+    }
   } else if (canvasId === 'cTreadling') {
     const T = d.treadles;
     const row = Math.floor(mouseY / cs);
     const col = Math.floor(mouseX / cs);
     if (row < 0 || row >= d.weftThreads || col < 0 || col >= T) return;
     const isSet = (editableTreadling[row + 1] || []).includes(col + 1);
+    const x0 = col * cs, y0 = row * cs;
+    if (!isSet && selectedColor) {
+      const [r, g, b] = parseRGB(selectedColor);
+      ctx.fillStyle = `rgba(${r},${g},${b},0.75)`;
+      ctx.fillRect(x0, y0, cs, cs);
+    } else {
+      ctx.fillStyle   = isSet ? 'rgba(220,60,60,0.3)' : 'rgba(80,220,130,0.3)';
+      ctx.fillRect(x0, y0, cs, cs);
+      ctx.strokeStyle = isSet ? 'rgba(255,80,80,0.9)' : 'rgba(80,255,140,0.9)';
+      ctx.lineWidth   = lw;
+      ctx.strokeRect(x0 + lw / 2, y0 + lw / 2, cs - lw, cs - lw);
+    }
+  } else if (canvasId === 'cTieup') {
+    const S = d.shafts;
+    const T = d.treadles;
+    const col = Math.floor(mouseX / cs);
+    const row = Math.floor(mouseY / cs);
+    if (col < 0 || col >= T || row < 0 || row >= S) return;
+    const treadle = col + 1;
+    const shaft   = S - row;
+    const isSet   = (editableTieup && (editableTieup[treadle] || [])).includes(shaft);
     const x0 = col * cs, y0 = row * cs;
     ctx.fillStyle   = isSet ? 'rgba(220,60,60,0.3)' : 'rgba(80,220,130,0.3)';
     ctx.fillRect(x0, y0, cs, cs);
@@ -1923,7 +2175,7 @@ function addThreadingColumns() {
   const count = Math.max(1, parseInt(document.getElementById('threadingAddCount').value) || 1);
   const W     = editableWarpThreads;
   const after = selectedThreadingCol;
-  const inheritColor = editableWarpColors[after] || (paintDraft && paintDraft.warpDefaultColor) || '#ffffff';
+  const inheritColor = selectedColor || editableWarpColors[after] || (paintDraft && paintDraft.warpDefaultColor) || '#ffffff';
 
   pushHistory();
 
@@ -1994,7 +2246,7 @@ function addTreadlingRows() {
   const count = Math.max(1, parseInt(document.getElementById('treadlingAddCount').value) || 1);
   const E     = editableWeftThreads;
   const after = selectedTreadlingRow;
-  const inheritColor = editableWeftColors[after] || (paintDraft && paintDraft.weftDefaultColor) || '#2c2c2c';
+  const inheritColor = selectedColor || editableWeftColors[after] || (paintDraft && paintDraft.weftDefaultColor) || '#2c2c2c';
 
   pushHistory();
 
@@ -2149,6 +2401,34 @@ async function removeTreadlingRows() {
     isPainting     = false;
     paintingCanvas = null;
   });
+
+  // Notes textarea — single listener, guards on editableMeta being live
+  const notesTextarea = document.getElementById('notesContent');
+  if (notesTextarea) {
+    notesTextarea.addEventListener('input', () => {
+      if (editableMeta) editableMeta.notes = notesTextarea.value;
+    });
+  }
+
+  // Tie-up structure editing (registered after the eyedropper handler so
+  // stopImmediatePropagation blocks this when the eyedropper is active)
+  const tieupCanvas = document.getElementById('cTieup');
+  if (tieupCanvas) {
+    tieupCanvas.addEventListener('mousedown', e => {
+      if (!structureEditMode || !paintDraft) return;
+      const { x, y } = canvasXY(tieupCanvas, e);
+      handleStructureEdit('cTieup', x, y);
+      clearAllOverlays();
+      drawStructurePreview('cTieup', x, y);
+    });
+    tieupCanvas.addEventListener('mousemove', e => {
+      if (!structureEditMode || !paintDraft) return;
+      const { x, y } = canvasXY(tieupCanvas, e);
+      clearAllOverlays();
+      drawStructurePreview('cTieup', x, y);
+    });
+    tieupCanvas.addEventListener('mouseleave', () => clearOverlay('cTieup'));
+  }
 
   // Native colour picker
   const picker = document.getElementById('colorPicker');
