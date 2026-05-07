@@ -98,7 +98,17 @@
   <div id="paletteSection" style="display:none;">
     <div class="section-label">Color Palette</div>
     <div class="palette-tools">
-      <input type="color" id="colorPicker" title="Custom colour">
+      <div id="colorPickerWrap">
+        <div id="colorPickerBtn" title="Custom colour" onclick="toggleColorPicker()"></div>
+        <div id="cpPopover" style="display:none;">
+          <div id="cpGradientWrap">
+            <canvas id="cpGradient" width="220" height="160"></canvas>
+            <div id="cpCursor"></div>
+          </div>
+          <input type="range" id="cpHueSlider" min="0" max="359" step="1" value="0">
+          <div id="cpHexDisplay">#000000</div>
+        </div>
+      </div>
       <button class="btn btn-ghost btn-sm" id="eyedropperBtn" onclick="toggleEyedropper()" title="Sample a colour from the draft (Esc to cancel)">&#x1F489; Sample</button>
       <button class="btn btn-ghost btn-sm" id="undoBtn" onclick="undo()" title="Undo last colour change (Ctrl+Z)">&#x21A9; Undo</button>
     </div>
