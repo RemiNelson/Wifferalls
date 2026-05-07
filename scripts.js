@@ -20,6 +20,10 @@ let eyedropperActive = false;
 // Custom colour picker state
 let cpHue = 0, cpSat = 100, cpVal = 100, cpDragging = false;
 
+// Cached yarn-twist grain patterns (generated once, reused every render)
+let _grainSrc = {};
+let _grainPat = {};
+
 // Undo history: array of { warp, weft } color snapshots
 const colorHistory = [];
 const MAX_HISTORY = 50;
@@ -858,6 +862,29 @@ function renderDraft() {
     }
   }
 
+  // Pass D — yarn-twist grain overlay (screen mode only, skipped at small cell sizes)
+  // Warp-on-top cells get \ grain; weft-on-top cells get / grain.
+  if (cs >= 6 && !printMode) {
+    const warpPath = new Path2D();
+    const weftPath = new Path2D();
+    for (let pick = 1; pick <= E; pick++) {
+      const y = (pick - 1) * cs;
+      for (let wi = 1; wi <= W; wi++) {
+        const x = txOff + (wi - 1) * cs;
+        if (wotGrid[pick][wi]) warpPath.rect(x, y, cs, cs);
+        else                    weftPath.rect(x, y, cs, cs);
+      }
+    }
+    dCtx.globalCompositeOperation = 'multiply';
+    dCtx.globalAlpha = 0.5;
+    dCtx.fillStyle = getGrainPattern(dCtx, 'warp');
+    dCtx.fill(warpPath);
+    dCtx.fillStyle = getGrainPattern(dCtx, 'weft');
+    dCtx.fill(weftPath);
+    dCtx.globalAlpha = 1;
+    dCtx.globalCompositeOperation = 'source-over';
+  }
+
   if (showGrid) drawGridLines(dCtx, W, E, txOff, 0);
 
   // ── TREADLING ──────────────────────────────────────────
@@ -918,6 +945,28 @@ function parseRGB(c) {
 // Build a cylindrical thread gradient along the given axis.
 // For warp (vertical thread): gradient runs left→right (x1≠x2, y1=y2=0).
 // For weft (horizontal thread): gradient runs top→bottom (x1=x2=0, y1≠y2).
+function getGrainPattern(ctx, type) {
+  if (_grainPat[type]) return _grainPat[type];
+  const sz = 20;
+  const src = document.createElement('canvas');
+  src.width = src.height = sz;
+  _grainSrc[type] = src;
+  const pc = src.getContext('2d');
+  pc.fillStyle = '#ffffff';
+  pc.fillRect(0, 0, sz, sz);
+  pc.strokeStyle = 'rgb(155,155,155)';
+  pc.lineWidth = 0.8;
+  pc.beginPath();
+  if (type === 'warp') {
+    pc.moveTo(0, 0); pc.lineTo(sz, sz); // \ diagonal
+  } else {
+    pc.moveTo(sz, 0); pc.lineTo(0, sz); // / diagonal
+  }
+  pc.stroke();
+  _grainPat[type] = ctx.createPattern(src, 'repeat');
+  return _grainPat[type];
+}
+
 function threadGrad(ctx, x1, y1, x2, y2, r, g, b) {
   const g_ = ctx.createLinearGradient(x1, y1, x2, y2);
   const c = v => Math.min(255, Math.max(0, Math.round(v)));
