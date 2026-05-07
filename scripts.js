@@ -17,6 +17,9 @@ let isPainting       = false;
 let paintingCanvas   = null;
 let eyedropperActive = false;
 
+// Custom colour picker state
+let cpHue = 0, cpSat = 100, cpVal = 100, cpDragging = false;
+
 // Undo history: array of { warp, weft } color snapshots
 const colorHistory = [];
 
@@ -1721,8 +1724,20 @@ function drawPreview(canvasId, mouseX, mouseY) {
 // Central setter: updates selectedColor, the picker, and swatch highlights.
 function setActiveColor(hex) {
   selectedColor = hex;
-  const picker = document.getElementById('colorPicker');
-  if (picker) picker.value = hex;
+  const btn = document.getElementById('colorPickerBtn');
+  if (btn) btn.style.background = hex;
+  const hexDisplay = document.getElementById('cpHexDisplay');
+  if (hexDisplay) hexDisplay.textContent = hex;
+  if (!cpDragging && /^#[0-9a-f]{6}$/i.test(hex)) {
+    [cpHue, cpSat, cpVal] = cpHexToHsv(hex);
+    const hueSliderEl = document.getElementById('cpHueSlider');
+    if (hueSliderEl) hueSliderEl.value = Math.round(cpHue);
+    const popover = document.getElementById('cpPopover');
+    if (popover && popover.style.display !== 'none') {
+      drawCpGradient();
+      cpUpdateCursor();
+    }
+  }
   document.querySelectorAll('.swatch').forEach(s => {
     s.classList.toggle('selected', s.dataset.color === hex);
   });
@@ -1730,6 +1745,115 @@ function setActiveColor(hex) {
     if (structureEditMode && (id === 'cThreading' || id === 'cTreadling')) return;
     document.getElementById(id).style.cursor = 'crosshair';
   });
+}
+
+function addColorToPalette(hex) {
+  const swatches = document.getElementById('swatches');
+  if (!swatches) return;
+  if (swatches.querySelector(`.swatch[data-color="${hex}"]`)) return;
+  const div = document.createElement('div');
+  div.className = 'swatch';
+  div.style.background = hex;
+  div.title = hex;
+  div.dataset.color = hex;
+  div.onclick = function() { selectPaletteColor(this); };
+  swatches.appendChild(div);
+}
+
+// ── Custom colour picker ──────────────────────────────────────────────────
+
+function cpHsvToRgb(h, s, v) {
+  s /= 100; v /= 100;
+  const i = Math.floor(h / 60) % 6;
+  const f = h / 60 - Math.floor(h / 60);
+  const p = v * (1 - s);
+  const q = v * (1 - f * s);
+  const t = v * (1 - (1 - f) * s);
+  return [[v,t,p],[q,v,p],[p,v,t],[p,q,v],[t,p,v],[v,p,q]][i].map(x => Math.round(x * 255));
+}
+
+function cpHexToHsv(hex) {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  const v = max * 100;
+  const s = max === 0 ? 0 : (d / max) * 100;
+  let h = 0;
+  if (d !== 0) {
+    if (max === r)      h = ((g - b) / d + 6) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else                h = (r - g) / d + 4;
+    h *= 60;
+  }
+  return [h, s, v];
+}
+
+function drawCpGradient() {
+  const canvas = document.getElementById('cpGradient');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const { width, height } = canvas;
+  const [r, g, b] = cpHsvToRgb(cpHue, 100, 100);
+  const gradH = ctx.createLinearGradient(0, 0, width, 0);
+  gradH.addColorStop(0, '#fff');
+  gradH.addColorStop(1, `rgb(${r},${g},${b})`);
+  ctx.fillStyle = gradH;
+  ctx.fillRect(0, 0, width, height);
+  const gradV = ctx.createLinearGradient(0, 0, 0, height);
+  gradV.addColorStop(0, 'transparent');
+  gradV.addColorStop(1, '#000');
+  ctx.fillStyle = gradV;
+  ctx.fillRect(0, 0, width, height);
+}
+
+function cpUpdateCursor() {
+  const canvas = document.getElementById('cpGradient');
+  const cursor = document.getElementById('cpCursor');
+  if (!canvas || !cursor) return;
+  const rect = canvas.getBoundingClientRect();
+  cursor.style.left = (cpSat / 100) * rect.width  + 'px';
+  cursor.style.top  = (1 - cpVal / 100) * rect.height + 'px';
+}
+
+function cpCurrentHex() {
+  const [r, g, b] = cpHsvToRgb(cpHue, cpSat, cpVal);
+  return toHex(r, g, b);
+}
+
+function cpUpdateDisplay() {
+  const hex = cpCurrentHex();
+  const btn = document.getElementById('colorPickerBtn');
+  if (btn) btn.style.background = hex;
+  const hexDisplay = document.getElementById('cpHexDisplay');
+  if (hexDisplay) hexDisplay.textContent = hex;
+  return hex;
+}
+
+function openColorPicker() {
+  const popover = document.getElementById('cpPopover');
+  if (!popover) return;
+  if (selectedColor && /^#[0-9a-f]{6}$/i.test(selectedColor)) {
+    [cpHue, cpSat, cpVal] = cpHexToHsv(selectedColor);
+    const hueSliderEl = document.getElementById('cpHueSlider');
+    if (hueSliderEl) hueSliderEl.value = Math.round(cpHue);
+  }
+  drawCpGradient();
+  cpUpdateCursor();
+  cpUpdateDisplay();
+  popover.style.display = 'block';
+}
+
+function closeColorPicker() {
+  const popover = document.getElementById('cpPopover');
+  if (popover) popover.style.display = 'none';
+}
+
+function toggleColorPicker() {
+  const popover = document.getElementById('cpPopover');
+  if (!popover) return;
+  if (popover.style.display === 'none' || !popover.style.display) openColorPicker();
+  else closeColorPicker();
 }
 
 function selectPaletteColor(el) {
@@ -1921,7 +2045,10 @@ function commitPaint() {
   dragStartThread = dragCurrentThread = -1;
   dragStartType = null;
 
-  if (changed) renderDraft();
+  if (changed) {
+    addColorToPalette(selectedColor);
+    renderDraft();
+  }
 }
 
 /* ═══════════════════════════════════════════════════
@@ -2430,9 +2557,49 @@ async function removeTreadlingRows() {
     tieupCanvas.addEventListener('mouseleave', () => clearOverlay('cTieup'));
   }
 
-  // Native colour picker
-  const picker = document.getElementById('colorPicker');
-  if (picker) picker.addEventListener('input', e => setActiveColor(e.target.value));
+  // Custom colour picker — gradient drag
+  const cpGrad = document.getElementById('cpGradient');
+  if (cpGrad) {
+    cpGrad.addEventListener('mousedown', e => {
+      cpDragging = true;
+      const rect = cpGrad.getBoundingClientRect();
+      cpSat = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width)  * 100));
+      cpVal = Math.max(0, Math.min(100, (1 - (e.clientY - rect.top) / rect.height) * 100));
+      cpUpdateCursor();
+      cpUpdateDisplay();
+      e.preventDefault();
+    });
+  }
+  document.addEventListener('mousemove', e => {
+    if (!cpDragging) return;
+    const grad = document.getElementById('cpGradient');
+    if (!grad) return;
+    const rect = grad.getBoundingClientRect();
+    cpSat = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width)  * 100));
+    cpVal = Math.max(0, Math.min(100, (1 - (e.clientY - rect.top) / rect.height) * 100));
+    cpUpdateCursor();
+    cpUpdateDisplay();
+  });
+  document.addEventListener('mouseup', e => {
+    if (!cpDragging) return;
+    cpDragging = false;
+    setActiveColor(cpUpdateDisplay());
+    closeColorPicker();
+  });
+  const hueSliderEl = document.getElementById('cpHueSlider');
+  if (hueSliderEl) {
+    hueSliderEl.addEventListener('input', e => {
+      cpHue = +e.target.value;
+      drawCpGradient();
+      cpUpdateCursor();
+      cpUpdateDisplay();
+    });
+  }
+  // Close picker on click outside or Escape
+  document.addEventListener('mousedown', e => {
+    const wrap = document.getElementById('colorPickerWrap');
+    if (wrap && !wrap.contains(e.target)) closeColorPicker();
+  });
 
   // Keyboard shortcuts
   document.addEventListener('keydown', e => {
@@ -2440,6 +2607,7 @@ async function removeTreadlingRows() {
       e.preventDefault();
       undo();
     }
+    if (e.key === 'Escape') closeColorPicker();
     if (e.key === 'Escape' && eyedropperActive) toggleEyedropper();
   });
 }());
