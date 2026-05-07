@@ -5,10 +5,10 @@
       --surface: #1c1e2b;
       --surface2: #242638;
       --border: #2e3048;
-      --accent: #e05c6e;
+      --accent: #a8d8be;
       --accent2: #7b8cde;
       --text: #dde1f5;
-      --muted: #7a7f9a;
+      --muted: #8b90ab;
       --grid: rgba(255,255,255,0.08);
       --cell-bg: #0c0d14;
     }
@@ -147,11 +147,44 @@
       gap: 0.5rem;
       cursor: pointer;
     }
-    .nd-checkbox-row input[type=checkbox] {
-      width: 14px; height: 14px;
-      accent-color: var(--accent);
-      cursor: pointer;
+
+    /* ── Toggle switch ── */
+    .toggle-label { cursor: pointer; }
+    .toggle-label input[type=checkbox] {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+      pointer-events: none;
+    }
+    .toggle-track {
+      display: inline-flex;
+      position: relative;
+      width: 30px;
+      height: 17px;
+      background: var(--border);
+      border-radius: 9px;
       flex-shrink: 0;
+      transition: background 0.18s;
+    }
+    .toggle-thumb {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 13px;
+      height: 13px;
+      background: var(--muted);
+      border-radius: 50%;
+      transition: transform 0.18s, background 0.18s;
+    }
+    .toggle-label input:checked ~ .toggle-track { background: var(--accent); }
+    .toggle-label input:checked ~ .toggle-track .toggle-thumb {
+      transform: translateX(13px);
+      background: #fff;
+    }
+    .toggle-label input:focus-visible ~ .toggle-track {
+      outline: 2px solid var(--accent2);
+      outline-offset: 2px;
     }
 
     @media (max-width: 620px) {
@@ -170,7 +203,7 @@
     .btn {
       display: inline-block;
       background: var(--accent);
-      color: #fff;
+      color: #12131a;
       border: none;
       padding: 0.5rem 1.4rem;
       border-radius: 6px;
@@ -383,7 +416,7 @@
     }
     .btn.active {
       background: var(--accent);
-      color: #fff;
+      color: #12131a;
       border-color: var(--accent);
       opacity: 1;
     }

@@ -63,8 +63,9 @@
             <option value="twill">Twill</option>
           </select>
         </label>
-        <label class="nd-checkbox-row">
+        <label class="nd-checkbox-row toggle-label">
           <input type="checkbox" id="ndRisingShed" checked>
+          <span class="toggle-track"><span class="toggle-thumb"></span></span>
           <span class="nd-lbl">Rising shed</span>
         </label>
         <button class="btn" type="submit">Create Draft</button>
@@ -124,18 +125,17 @@
              oninput="changeCellSize(+this.value)">
       <span id="cellSizeLbl">12px</span>
     </label>
-    <label>
+    <label class="toggle-label">
       <input type="checkbox" id="showGrid" checked onchange="renderDraft()">
+      <span class="toggle-track"><span class="toggle-thumb"></span></span>
       Grid lines
     </label>
-    <label>
+    <label class="toggle-label">
       <input type="checkbox" id="showLabels" checked onchange="renderDraft()">
+      <span class="toggle-track"><span class="toggle-thumb"></span></span>
       Shaft / treadle labels
     </label>
-    <label>
-      <input type="checkbox" id="editStructure" onchange="setStructureEditMode(this.checked)">
-      Edit threading / treadling
-    </label>
+    <button class="btn btn-ghost btn-sm" id="editStructureBtn" onclick="setStructureEditMode(!structureEditMode)">Edit threading / treadling</button>
     <div id="structEditControls" style="display:none; flex-basis:100%;">
       <div class="struct-ctrl-group">
         <span>Threading &mdash; Col:&nbsp;<span id="selThreadingCol" class="struct-sel-val">—</span></span>
