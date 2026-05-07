@@ -20,11 +20,13 @@
   </div>
 </header>
 
+<main>
+
 <!-- Upload screen -->
 <div id="uploadArea">
   <div class="upload-options">
     <div class="drop-zone" id="dropZone">
-      <div class="icon">🧵</div>
+      <div class="icon" aria-hidden="true">🧵</div>
       <h2>Open a WIF file</h2>
       <p>Drag &amp; drop a .wif file here, or click below to browse</p>
       <button class="btn" id="browseBtn">Choose File</button>
@@ -82,17 +84,17 @@
       <span class="filesize" id="fileSize"></span>
     </div>
     <div style="display:flex;gap:0.5rem;">
-      <button class="btn btn-ghost btn-sm" id="exportBtn" onclick="exportWIF()" title="Download a WIF file with your colour edits">&#x2193; Export WIF</button>
-      <button class="btn btn-ghost btn-sm" onclick="exportPDF()" title="Open a print-ready PDF of the weaving draft">&#x2399; Export PDF</button>
+      <button class="btn btn-ghost btn-sm" id="exportBtn" onclick="exportWIF()" title="Download a WIF file with your colour edits"><span aria-hidden="true">&#x2193;</span> Export WIF</button>
+      <button class="btn btn-ghost btn-sm" onclick="exportPDF()" title="Open a print-ready PDF of the weaving draft"><span aria-hidden="true">&#x2399;</span> Export PDF</button>
       <button class="btn btn-ghost btn-sm" onclick="resetApp()">Load Another</button>
     </div>
   </div>
 
-  <div id="errorBox" class="error" style="display:none;"></div>
+  <div id="errorBox" class="error" role="alert" style="display:none;"></div>
 
   <div id="metaSection"></div>
   <div id="notesSection" style="display:none;">
-    <div class="section-label">Notes</div>
+    <label class="section-label" for="notesContent">Notes</label>
     <textarea class="notes-box" id="notesContent" placeholder="Add notes about this draft..."></textarea>
   </div>
   <div class="sticky-bar">
@@ -100,20 +102,20 @@
     <div class="section-label">Color Palette</div>
     <div class="palette-tools">
       <div id="colorPickerWrap">
-        <div id="colorPickerBtn" title="Custom colour" onclick="toggleColorPicker()"></div>
+        <div id="colorPickerBtn" role="button" tabindex="0" aria-label="Choose custom colour" aria-expanded="false" title="Custom colour" onclick="toggleColorPicker()"></div>
         <div id="cpPopover" style="display:none;">
           <div id="cpGradientWrap">
             <canvas id="cpGradient" width="220" height="160"></canvas>
             <div id="cpCursor"></div>
           </div>
-          <input type="range" id="cpHueSlider" min="0" max="359" step="1" value="0">
+          <input type="range" id="cpHueSlider" min="0" max="359" step="1" value="0" aria-label="Hue">
           <div id="cpHexDisplay">#000000</div>
         </div>
       </div>
-      <button class="btn btn-ghost btn-sm" id="eyedropperBtn" onclick="toggleEyedropper()" title="Sample a colour from the draft (Esc to cancel)">&#x1F489; Sample</button>
-      <button class="btn btn-ghost btn-sm" id="undoBtn" onclick="undo()" title="Undo last colour change (Ctrl+Z)">&#x21A9; Undo</button>
+      <button class="btn btn-ghost btn-sm" id="eyedropperBtn" onclick="toggleEyedropper()" title="Sample a colour from the draft (Esc to cancel)"><span aria-hidden="true">&#x1F489;</span> Sample</button>
+      <button class="btn btn-ghost btn-sm" id="undoBtn" onclick="undo()" title="Undo last colour change (Ctrl+Z)"><span aria-hidden="true">&#x21A9;</span> Undo</button>
     </div>
-    <div class="swatches" id="swatches"></div>
+    <div class="swatches" id="swatches" role="list" aria-label="Colour palette"></div>
   </div>
 
   <div class="section-label">Weaving Draft</div>
@@ -169,25 +171,27 @@
         <!-- threading panel (col 1 row 1) -->
         <div class="panel-wrap" style="grid-column:1; grid-row:1;">
           <div class="panel-label">Threading</div>
-          <canvas id="cThreading"></canvas>
+          <canvas id="cThreading" role="img" aria-label="Threading panel"></canvas>
         </div>
         <!-- tieup panel (col 2 row 1) -->
         <div class="panel-wrap" style="grid-column:2; grid-row:1;" id="tieupWrap">
           <div class="panel-label">Tie-up</div>
-          <canvas id="cTieup"></canvas>
+          <div id="tieupBorder"><canvas id="cTieup" role="img" aria-label="Tie-up panel"></canvas></div>
         </div>
         <!-- fabric preview panel (col 1 row 2) — no label so canvas top meets tieup canvas bottom -->
         <div class="panel-wrap" style="grid-column:1; grid-row:2;">
-          <canvas id="cDrawdown"></canvas>
+          <canvas id="cDrawdown" role="img" aria-label="Drawdown panel"></canvas>
         </div>
         <!-- treadling panel (col 2 row 2) — no label so canvas top meets tieup canvas bottom -->
         <div class="panel-wrap" style="grid-column:2; grid-row:2;" id="treadlingWrap">
-          <canvas id="cTreadling"></canvas>
+          <canvas id="cTreadling" role="img" aria-label="Treadling panel"></canvas>
         </div>
       </div>
     </div>
   </div>
 </div>
+
+</main>
 
 <script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="scripts.js"></script>

@@ -22,6 +22,7 @@ let cpHue = 0, cpSat = 100, cpVal = 100, cpDragging = false;
 
 // Undo history: array of { warp, weft } color snapshots
 const colorHistory = [];
+const MAX_HISTORY = 50;
 
 // Cached render state for hit-testing during painting
 let paintDraft   = null;
@@ -45,6 +46,10 @@ let structureEditMode  = false;
 let selectedThreadingCol = null; // 1-based selected threading column
 let selectedTreadlingRow = null; // 1-based selected treadling row
 let suppressRemoveConfirm = false; // session flag: skip remove confirmation
+
+// Canvas ID lists — defined once so a typo can't silently break cursor/overlay logic
+const PAINT_CANVASES = ['cThreading', 'cDrawdown', 'cTreadling'];
+const ALL_CANVASES   = ['cThreading', 'cTieup', 'cDrawdown', 'cTreadling'];
 
 const dropZone  = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
@@ -139,7 +144,7 @@ function startNewDraft() {
   wifData['COLOR PALETTE'] = { 'ENTRIES': '10', 'FORM': 'RGB', 'RANGE': '0,255' };
   wifData['COLOR TABLE']   = {
     '1':  '255,255,255',
-    '2':  '28,28,32',
+    '2':  '64,96,176',
     '3':  '210,40,40',
     '4':  '220,110,20',
     '5':  '210,185,15',
@@ -343,7 +348,7 @@ function extractDraft() {
   }
 
   const warpDefaultColor = resolveDefaultColor('WARP', '#ffffff');
-  const weftDefaultColor = resolveDefaultColor('WEFT', '#2c2c2c');
+  const weftDefaultColor = resolveDefaultColor('WEFT', '#4060b0');
 
   // ── Per-thread colors ─────────────────────────────
   function buildThreadColors(count, colorsSec, defaultColor) {
@@ -531,7 +536,7 @@ function buildMeta() {
       const g = Math.round((rgb[1] - swRangeFrom) * sc);
       const b = Math.round((rgb[2] - swRangeFrom) * sc);
       const hex = toHex(r, g, b);
-      return `<div class="swatch" style="background:${hex}" title="${colorLabel(hex)}" data-color="${hex}" onclick="selectPaletteColor(this)"></div>`;
+      return `<div class="swatch" role="listitem button" tabindex="0" style="background:${hex}" title="${colorLabel(hex)}" aria-label="${colorLabel(hex)}" data-color="${hex}" onclick="selectPaletteColor(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectPaletteColor(this);}"></div>`;
     }).join('');
     document.getElementById('swatches').innerHTML = html;
   }
@@ -656,6 +661,11 @@ function renderDraft() {
   const uCtx = prep('cTieup',     tieupW,     tieupH);
   const dCtx = prep('cDrawdown',  drawdownW,  drawdownH);
   const rCtx = prep('cTreadling', treadlingW, treadlingH);
+
+  document.getElementById('cThreading').setAttribute('aria-label', `Threading: ${W} ends across ${S} shafts`);
+  document.getElementById('cTieup').setAttribute('aria-label',     `Tie-up: ${T} treadles × ${S} shafts`);
+  document.getElementById('cDrawdown').setAttribute('aria-label',  `Drawdown: ${W} ends × ${E} picks`);
+  document.getElementById('cTreadling').setAttribute('aria-label', `Treadling: ${E} picks across ${T} treadles`);
   syncOverlaySize('cThreading');
   syncOverlaySize('cTieup');
   syncOverlaySize('cDrawdown');
@@ -663,8 +673,9 @@ function renderDraft() {
 
   // Theme colors — swap to light palette when rendering for print
   const BG        = printMode ? '#ffffff'            : '#0c0d14';
-  const GRID_COL  = printMode ? 'rgba(0,0,0,0.12)'  : 'rgba(255,255,255,0.1)';
-  const MARK_COL  = '#e05c6e';
+  const GRID_COL        = printMode ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.1)';
+  const GRID_COL_STRUCT = printMode ? 'rgba(0,0,0,0.4)'  : 'rgba(255,255,255,0.4)';
+  const MARK_COL  = printMode ? '#2d6b50' : '#a8d8be';
   const LBL_COL   = printMode ? 'rgba(50,50,70,0.7)': 'rgba(180,185,210,0.55)';
   const EMPTY     = BG;
 
@@ -673,10 +684,10 @@ function renderDraft() {
     ctx.fillRect(0, 0, w, h);
   }
 
-  function drawGridLines(ctx, cols, rows, xOff, yOff) {
+  function drawGridLines(ctx, cols, rows, xOff, yOff, color = GRID_COL, lw = 0.5) {
     ctx.save();
-    ctx.strokeStyle = GRID_COL;
-    ctx.lineWidth   = 0.5;
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = lw;
     for (let c = 0; c <= cols; c++) {
       const x = xOff + c * cs + 0.5;
       ctx.beginPath(); ctx.moveTo(x, yOff); ctx.lineTo(x, yOff + rows * cs); ctx.stroke();
@@ -730,20 +741,11 @@ function renderDraft() {
       if (sh < 1 || sh > S) continue;
       const row = S - sh;
       const y   = row * cs;
-      const cx  = x + cs / 2, cy = y + cs / 2, rad = cs * 0.42;
-      // Filled circle with radial gradient to look like thread cross-section
-      const rg = tCtx.createRadialGradient(cx - rad * 0.3, cy - rad * 0.3, 0, cx, cy, rad);
-      const c = v => Math.min(255, Math.max(0, Math.round(v)));
-      rg.addColorStop(0,   `rgb(${c(wr*1.6)},${c(wg*1.6)},${c(wb*1.6)})`);
-      rg.addColorStop(0.5, `rgb(${wr},${wg},${wb})`);
-      rg.addColorStop(1,   `rgb(${c(wr*.35)},${c(wg*.35)},${c(wb*.35)})`);
-      tCtx.beginPath();
-      tCtx.arc(cx, cy, rad, 0, Math.PI * 2);
-      tCtx.fillStyle = rg;
-      tCtx.fill();
+      tCtx.fillStyle = `rgb(${wr},${wg},${wb})`;
+      tCtx.fillRect(x, y, cs, cs);
     }
   }
-  if (showGrid) drawGridLines(tCtx, W, S, txOff, 0);
+  if (showGrid) drawGridLines(tCtx, W, S, txOff, 0, GRID_COL_STRUCT, 1);
   drawShaftLabels(tCtx, S, txOff, 0);
 
   // ── TIEUP ──────────────────────────────────────────────
@@ -759,7 +761,7 @@ function renderDraft() {
         uCtx.fillRect(col * cs, row * cs, cs, cs);
       }
     }
-    if (showGrid) drawGridLines(uCtx, T, S, 0, 0);
+    if (showGrid) drawGridLines(uCtx, T, S, 0, 0, GRID_COL_STRUCT, 1);
   }
 
   // ── DRAWDOWN ───────────────────────────────────────────
@@ -873,7 +875,7 @@ function renderDraft() {
         rCtx.fillRect(col * cs, row * cs, cs, cs);
       }
     }
-    if (showGrid) drawGridLines(rCtx, T, E, 0, 0);
+    if (showGrid) drawGridLines(rCtx, T, E, 0, 0, GRID_COL_STRUCT, 1);
   }
 
   // Drawdown left label: use it for weft pick numbers in lieu of a weft color bar
@@ -1633,7 +1635,7 @@ async function exportPDF() {
 // ── Overlay canvases (positioned on top of each painting canvas) ──────────
 
 function setupOverlays() {
-  ['cThreading', 'cTieup', 'cDrawdown', 'cTreadling'].forEach(id => {
+  ALL_CANVASES.forEach(id => {
     const main = document.getElementById(id);
     // Wrap the canvas itself so the overlay aligns with the canvas,
     // not with the panel-wrap (which may include a label above the canvas).
@@ -1781,7 +1783,7 @@ function setActiveColor(hex) {
   document.querySelectorAll('.swatch').forEach(s => {
     s.classList.toggle('selected', s.dataset.color === hex);
   });
-  ['cThreading', 'cDrawdown', 'cTreadling'].forEach(id => {
+  PAINT_CANVASES.forEach(id => {
     if (structureEditMode && (id === 'cThreading' || id === 'cTreadling')) return;
     document.getElementById(id).style.cursor = 'crosshair';
   });
@@ -1793,10 +1795,16 @@ function addColorToPalette(hex) {
   if (swatches.querySelector(`.swatch[data-color="${hex}"]`)) return;
   const div = document.createElement('div');
   div.className = 'swatch';
+  div.setAttribute('role', 'listitem button');
+  div.setAttribute('tabindex', '0');
+  div.setAttribute('aria-label', colorLabel(hex));
   div.style.background = hex;
   div.title = colorLabel(hex);
   div.dataset.color = hex;
   div.onclick = function() { selectPaletteColor(this); };
+  div.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectPaletteColor(div); }
+  });
   swatches.appendChild(div);
 }
 
@@ -1882,11 +1890,14 @@ function openColorPicker() {
   cpUpdateCursor();
   cpUpdateDisplay();
   popover.style.display = 'block';
+  document.getElementById('colorPickerBtn').setAttribute('aria-expanded', 'true');
 }
 
 function closeColorPicker() {
   const popover = document.getElementById('cpPopover');
   if (popover) popover.style.display = 'none';
+  const btn = document.getElementById('colorPickerBtn');
+  if (btn) btn.setAttribute('aria-expanded', 'false');
 }
 
 function toggleColorPicker() {
@@ -1901,7 +1912,7 @@ function selectPaletteColor(el) {
     el.classList.remove('selected');
     selectedColor = null;
     clearAllOverlays();
-    ['cThreading', 'cDrawdown', 'cTreadling'].forEach(id => {
+    PAINT_CANVASES.forEach(id => {
       if (structureEditMode && (id === 'cThreading' || id === 'cTreadling')) return;
       document.getElementById(id).style.cursor = '';
     });
@@ -1913,13 +1924,12 @@ function selectPaletteColor(el) {
 function toggleEyedropper() {
   eyedropperActive = !eyedropperActive;
   document.getElementById('eyedropperBtn').classList.toggle('active', eyedropperActive);
-  const all = ['cThreading', 'cTieup', 'cDrawdown', 'cTreadling'];
   if (eyedropperActive) {
-    all.forEach(id => { const el = document.getElementById(id); if (el) el.style.cursor = 'crosshair'; });
+    ALL_CANVASES.forEach(id => { const el = document.getElementById(id); if (el) el.style.cursor = 'crosshair'; });
   } else {
-    all.forEach(id => { const el = document.getElementById(id); if (el) el.style.cursor = ''; });
+    ALL_CANVASES.forEach(id => { const el = document.getElementById(id); if (el) el.style.cursor = ''; });
     if (selectedColor) {
-      ['cThreading', 'cDrawdown', 'cTreadling'].forEach(id => {
+      PAINT_CANVASES.forEach(id => {
         document.getElementById(id).style.cursor = 'crosshair';
       });
     }
@@ -1962,7 +1972,7 @@ function pushHistory() {
     for (const [k, v] of Object.entries(editableTieup)) snap.tieup[k] = v.slice();
   }
   colorHistory.push(snap);
-  if (colorHistory.length > 50) colorHistory.shift();
+  if (colorHistory.length > MAX_HISTORY) colorHistory.shift();
 }
 
 function undo() {
@@ -2308,34 +2318,36 @@ function updateTreadlingRowDisplay() {
 
 function showRemoveConfirmDialog(what, fromPos, count) {
   return new Promise(resolve => {
-    const overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:9999;display:flex;align-items:center;justify-content:center;';
-    const box = document.createElement('div');
-    box.style.cssText = 'background:#1c1e2b;border:1px solid #2e3048;border-radius:12px;padding:1.5rem 1.75rem;max-width:360px;width:90%;font-family:system-ui,-apple-system,sans-serif;font-size:14px;color:#dde1f5;';
     const label = count === 1
       ? `1 ${what.replace(/s$/, '')} at position ${fromPos}`
       : `${count} ${what} starting at position ${fromPos}`;
-    box.innerHTML = `
-      <h3 style="margin:0 0 0.5rem;font-size:0.95rem;font-weight:700;color:#a8d8be;">Confirm remove</h3>
-      <p style="margin:0 0 1rem;font-size:0.85rem;color:#8b90ab;line-height:1.5;">Remove ${label}? This can be undone with Ctrl+Z.</p>
-      <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.8rem;color:#8b90ab;margin-bottom:1.1rem;cursor:pointer;">
-        <input type="checkbox" id="noConfirmChk"> Don't ask again this session
-      </label>
-      <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
-        <button id="dlgCancel" style="background:transparent;border:1px solid #2e3048;border-radius:6px;padding:0.3rem 0.9rem;font-size:0.8rem;color:#8b90ab;cursor:pointer;">Cancel</button>
-        <button id="dlgConfirm" style="background:#e05c6e;border:none;border-radius:6px;padding:0.3rem 0.9rem;font-size:0.8rem;font-weight:600;color:#12131a;cursor:pointer;">Remove</button>
+    const dlg = document.createElement('dialog');
+    dlg.setAttribute('aria-labelledby', 'dlgTitle');
+    dlg.setAttribute('aria-modal', 'true');
+    dlg.innerHTML = `
+      <div style="background:#1c1e2b;border:1px solid #2e3048;border-radius:12px;padding:1.5rem 1.75rem;max-width:360px;width:90%;font-family:system-ui,-apple-system,sans-serif;font-size:14px;color:#dde1f5;">
+        <h3 id="dlgTitle" style="margin:0 0 0.5rem;font-size:0.95rem;font-weight:700;color:#a8d8be;">Confirm remove</h3>
+        <p style="margin:0 0 1rem;font-size:0.85rem;color:#8b90ab;line-height:1.5;">Remove ${label}? This can be undone with Ctrl+Z.</p>
+        <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.8rem;color:#8b90ab;margin-bottom:1.1rem;cursor:pointer;">
+          <input type="checkbox" id="noConfirmChk"> Don't ask again this session
+        </label>
+        <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
+          <button id="dlgCancel" style="background:transparent;border:1px solid #2e3048;border-radius:6px;padding:0.3rem 0.9rem;font-size:0.8rem;color:#8b90ab;cursor:pointer;">Cancel</button>
+          <button id="dlgConfirm" style="background:#a8d8be;border:none;border-radius:6px;padding:0.3rem 0.9rem;font-size:0.8rem;font-weight:600;color:#12131a;cursor:pointer;">Remove</button>
+        </div>
       </div>
     `;
-    overlay.appendChild(box);
-    document.body.appendChild(overlay);
+    document.body.appendChild(dlg);
+    dlg.showModal();
     const done = result => {
-      if (document.getElementById('noConfirmChk').checked) suppressRemoveConfirm = true;
-      document.body.removeChild(overlay);
+      if (dlg.querySelector('#noConfirmChk').checked) suppressRemoveConfirm = true;
+      dlg.close();
+      document.body.removeChild(dlg);
       resolve(result);
     };
-    box.querySelector('#dlgConfirm').addEventListener('click', () => done(true));
-    box.querySelector('#dlgCancel').addEventListener('click',  () => done(false));
-    overlay.addEventListener('click', e => { if (e.target === overlay) done(false); });
+    dlg.querySelector('#dlgConfirm').addEventListener('click', () => done(true));
+    dlg.querySelector('#dlgCancel').addEventListener('click',  () => done(false));
+    dlg.addEventListener('cancel', e => { e.preventDefault(); done(false); });
   });
 }
 
@@ -2415,7 +2427,7 @@ function addTreadlingRows() {
   const count = Math.max(1, parseInt(document.getElementById('treadlingAddCount').value) || 1);
   const E     = editableWeftThreads;
   const after = selectedTreadlingRow;
-  const inheritColor = selectedColor || editableWeftColors[after] || (paintDraft && paintDraft.weftDefaultColor) || '#2c2c2c';
+  const inheritColor = selectedColor || editableWeftColors[after] || (paintDraft && paintDraft.weftDefaultColor) || '#4060b0';
 
   pushHistory();
 
@@ -2494,7 +2506,7 @@ async function removeTreadlingRows() {
   }
 
   // Eyedropper: registered first so stopImmediatePropagation blocks the paint handler.
-  ['cThreading', 'cTieup', 'cDrawdown', 'cTreadling'].forEach(id => {
+  ALL_CANVASES.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener('mousedown', e => {
@@ -2506,7 +2518,7 @@ async function removeTreadlingRows() {
   });
 
   // Painting canvases
-  ['cThreading', 'cDrawdown', 'cTreadling'].forEach(id => {
+  PAINT_CANVASES.forEach(id => {
     const el = document.getElementById(id);
 
     el.addEventListener('mousedown', e => {
@@ -2613,10 +2625,8 @@ async function removeTreadlingRows() {
     });
   }
   document.addEventListener('mousemove', e => {
-    if (!cpDragging) return;
-    const grad = document.getElementById('cpGradient');
-    if (!grad) return;
-    const rect = grad.getBoundingClientRect();
+    if (!cpDragging || !cpGrad) return;
+    const rect = cpGrad.getBoundingClientRect();
     cpSat = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width)  * 100));
     cpVal = Math.max(0, Math.min(100, (1 - (e.clientY - rect.top) / rect.height) * 100));
     cpUpdateCursor();
@@ -2642,6 +2652,14 @@ async function removeTreadlingRows() {
     const wrap = document.getElementById('colorPickerWrap');
     if (wrap && !wrap.contains(e.target)) closeColorPicker();
   });
+
+  // Colour picker button: keyboard activation
+  const cpBtn = document.getElementById('colorPickerBtn');
+  if (cpBtn) {
+    cpBtn.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleColorPicker(); }
+    });
+  }
 
   // Keyboard shortcuts
   document.addEventListener('keydown', e => {
