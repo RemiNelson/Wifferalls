@@ -536,7 +536,7 @@ function buildMeta() {
       const g = Math.round((rgb[1] - swRangeFrom) * sc);
       const b = Math.round((rgb[2] - swRangeFrom) * sc);
       const hex = toHex(r, g, b);
-      return `<div class="swatch" style="background:${hex}" title="${colorLabel(hex)}" data-color="${hex}" onclick="selectPaletteColor(this)"></div>`;
+      return `<div class="swatch" role="listitem button" tabindex="0" style="background:${hex}" title="${colorLabel(hex)}" aria-label="${colorLabel(hex)}" data-color="${hex}" onclick="selectPaletteColor(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectPaletteColor(this);}"></div>`;
     }).join('');
     document.getElementById('swatches').innerHTML = html;
   }
@@ -661,6 +661,11 @@ function renderDraft() {
   const uCtx = prep('cTieup',     tieupW,     tieupH);
   const dCtx = prep('cDrawdown',  drawdownW,  drawdownH);
   const rCtx = prep('cTreadling', treadlingW, treadlingH);
+
+  document.getElementById('cThreading').setAttribute('aria-label', `Threading: ${W} ends across ${S} shafts`);
+  document.getElementById('cTieup').setAttribute('aria-label',     `Tie-up: ${T} treadles × ${S} shafts`);
+  document.getElementById('cDrawdown').setAttribute('aria-label',  `Drawdown: ${W} ends × ${E} picks`);
+  document.getElementById('cTreadling').setAttribute('aria-label', `Treadling: ${E} picks across ${T} treadles`);
   syncOverlaySize('cThreading');
   syncOverlaySize('cTieup');
   syncOverlaySize('cDrawdown');
@@ -1790,10 +1795,16 @@ function addColorToPalette(hex) {
   if (swatches.querySelector(`.swatch[data-color="${hex}"]`)) return;
   const div = document.createElement('div');
   div.className = 'swatch';
+  div.setAttribute('role', 'listitem button');
+  div.setAttribute('tabindex', '0');
+  div.setAttribute('aria-label', colorLabel(hex));
   div.style.background = hex;
   div.title = colorLabel(hex);
   div.dataset.color = hex;
   div.onclick = function() { selectPaletteColor(this); };
+  div.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectPaletteColor(div); }
+  });
   swatches.appendChild(div);
 }
 
@@ -1879,11 +1890,14 @@ function openColorPicker() {
   cpUpdateCursor();
   cpUpdateDisplay();
   popover.style.display = 'block';
+  document.getElementById('colorPickerBtn').setAttribute('aria-expanded', 'true');
 }
 
 function closeColorPicker() {
   const popover = document.getElementById('cpPopover');
   if (popover) popover.style.display = 'none';
+  const btn = document.getElementById('colorPickerBtn');
+  if (btn) btn.setAttribute('aria-expanded', 'false');
 }
 
 function toggleColorPicker() {
@@ -2304,34 +2318,36 @@ function updateTreadlingRowDisplay() {
 
 function showRemoveConfirmDialog(what, fromPos, count) {
   return new Promise(resolve => {
-    const overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:9999;display:flex;align-items:center;justify-content:center;';
-    const box = document.createElement('div');
-    box.style.cssText = 'background:#1c1e2b;border:1px solid #2e3048;border-radius:12px;padding:1.5rem 1.75rem;max-width:360px;width:90%;font-family:system-ui,-apple-system,sans-serif;font-size:14px;color:#dde1f5;';
     const label = count === 1
       ? `1 ${what.replace(/s$/, '')} at position ${fromPos}`
       : `${count} ${what} starting at position ${fromPos}`;
-    box.innerHTML = `
-      <h3 style="margin:0 0 0.5rem;font-size:0.95rem;font-weight:700;color:#a8d8be;">Confirm remove</h3>
-      <p style="margin:0 0 1rem;font-size:0.85rem;color:#8b90ab;line-height:1.5;">Remove ${label}? This can be undone with Ctrl+Z.</p>
-      <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.8rem;color:#8b90ab;margin-bottom:1.1rem;cursor:pointer;">
-        <input type="checkbox" id="noConfirmChk"> Don't ask again this session
-      </label>
-      <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
-        <button id="dlgCancel" style="background:transparent;border:1px solid #2e3048;border-radius:6px;padding:0.3rem 0.9rem;font-size:0.8rem;color:#8b90ab;cursor:pointer;">Cancel</button>
-        <button id="dlgConfirm" style="background:#e05c6e;border:none;border-radius:6px;padding:0.3rem 0.9rem;font-size:0.8rem;font-weight:600;color:#12131a;cursor:pointer;">Remove</button>
+    const dlg = document.createElement('dialog');
+    dlg.setAttribute('aria-labelledby', 'dlgTitle');
+    dlg.setAttribute('aria-modal', 'true');
+    dlg.innerHTML = `
+      <div style="background:#1c1e2b;border:1px solid #2e3048;border-radius:12px;padding:1.5rem 1.75rem;max-width:360px;width:90%;font-family:system-ui,-apple-system,sans-serif;font-size:14px;color:#dde1f5;">
+        <h3 id="dlgTitle" style="margin:0 0 0.5rem;font-size:0.95rem;font-weight:700;color:#a8d8be;">Confirm remove</h3>
+        <p style="margin:0 0 1rem;font-size:0.85rem;color:#8b90ab;line-height:1.5;">Remove ${label}? This can be undone with Ctrl+Z.</p>
+        <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.8rem;color:#8b90ab;margin-bottom:1.1rem;cursor:pointer;">
+          <input type="checkbox" id="noConfirmChk"> Don't ask again this session
+        </label>
+        <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
+          <button id="dlgCancel" style="background:transparent;border:1px solid #2e3048;border-radius:6px;padding:0.3rem 0.9rem;font-size:0.8rem;color:#8b90ab;cursor:pointer;">Cancel</button>
+          <button id="dlgConfirm" style="background:#a8d8be;border:none;border-radius:6px;padding:0.3rem 0.9rem;font-size:0.8rem;font-weight:600;color:#12131a;cursor:pointer;">Remove</button>
+        </div>
       </div>
     `;
-    overlay.appendChild(box);
-    document.body.appendChild(overlay);
+    document.body.appendChild(dlg);
+    dlg.showModal();
     const done = result => {
-      if (document.getElementById('noConfirmChk').checked) suppressRemoveConfirm = true;
-      document.body.removeChild(overlay);
+      if (dlg.querySelector('#noConfirmChk').checked) suppressRemoveConfirm = true;
+      dlg.close();
+      document.body.removeChild(dlg);
       resolve(result);
     };
-    box.querySelector('#dlgConfirm').addEventListener('click', () => done(true));
-    box.querySelector('#dlgCancel').addEventListener('click',  () => done(false));
-    overlay.addEventListener('click', e => { if (e.target === overlay) done(false); });
+    dlg.querySelector('#dlgConfirm').addEventListener('click', () => done(true));
+    dlg.querySelector('#dlgCancel').addEventListener('click',  () => done(false));
+    dlg.addEventListener('cancel', e => { e.preventDefault(); done(false); });
   });
 }
 
@@ -2636,6 +2652,14 @@ async function removeTreadlingRows() {
     const wrap = document.getElementById('colorPickerWrap');
     if (wrap && !wrap.contains(e.target)) closeColorPicker();
   });
+
+  // Colour picker button: keyboard activation
+  const cpBtn = document.getElementById('colorPickerBtn');
+  if (cpBtn) {
+    cpBtn.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleColorPicker(); }
+    });
+  }
 
   // Keyboard shortcuts
   document.addEventListener('keydown', e => {

@@ -136,10 +136,8 @@
       padding: 0.3rem 0.4rem;
       text-align: center;
     }
-    .nd-input:focus {
-      outline: none;
-      border-color: var(--accent2);
-    }
+    .nd-input:focus { outline: none; border-color: var(--accent2); }
+    .nd-input:focus-visible { outline: 2px solid var(--accent2); outline-offset: 2px; }
     .nd-checkbox-row {
       display: flex;
       align-items: center;
@@ -286,6 +284,7 @@
       width: 100%;
     }
     .meta-input:focus { outline: none; border-color: var(--accent2); }
+    .meta-input:focus-visible { outline: 2px solid var(--accent2); outline-offset: 2px; }
     .meta-rising-shed { cursor: pointer; user-select: none; }
     .meta-rs-val { display: flex; align-items: center; gap: 0.4rem; }
     .meta-rising-shed input[type=checkbox] {
@@ -376,6 +375,10 @@
       border-radius: 7px;
       outline: none;
       cursor: pointer;
+    }
+    #cpHueSlider:focus-visible { outline: 2px solid var(--accent2); outline-offset: 3px; }
+    #cellSizeRange:focus-visible { outline: 2px solid var(--accent2); outline-offset: 3px; }
+    #cpHueSlider {
       background: linear-gradient(to right,
         hsl(0,100%,50%),   hsl(30,100%,50%),  hsl(60,100%,50%),
         hsl(90,100%,50%),  hsl(120,100%,50%), hsl(150,100%,50%),
@@ -540,4 +543,24 @@
       color: var(--accent);
       margin: 1rem 0;
       font-size: 0.85rem;
+    }
+
+    /* ── Accessibility ── */
+    .swatch:focus-visible {
+      outline: 2px solid var(--accent2);
+      outline-offset: 2px;
+    }
+    dialog::backdrop {
+      background: rgba(0, 0, 0, 0.72);
+    }
+    dialog {
+      border: none;
+      padding: 0;
+      background: transparent;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+      }
     }
