@@ -81,7 +81,7 @@
     }
     .drop-zone:hover, .drop-zone.over {
       border-color: var(--accent);
-      background: rgba(224, 92, 110, 0.05);
+      background: color-mix(in srgb, var(--accent) 5%, transparent);
     }
     .drop-zone input[type=file] { display: none; }
     .drop-zone .icon { font-size: 3rem; margin-bottom: 1rem; }
@@ -121,12 +121,11 @@
       align-items: flex-start;
       gap: 0.2rem;
     }
-    .nd-lbl {
-      font-size: 0.68rem;
+    .nd-lbl, .meta-lbl, .section-label, .panel-label {
       text-transform: uppercase;
-      letter-spacing: 0.06em;
       color: var(--muted);
     }
+    .nd-lbl { font-size: 0.68rem; letter-spacing: 0.06em; }
     .nd-input {
       width: 100%;
       background: var(--surface2);
@@ -241,9 +240,7 @@
     /* ── Info cards ── */
     .section-label {
       font-size: 0.7rem;
-      text-transform: uppercase;
       letter-spacing: 0.08em;
-      color: var(--muted);
       margin: 1.25rem 0 0.6rem;
       padding-bottom: 0.4rem;
       border-bottom: 1px solid var(--border);
@@ -278,12 +275,7 @@
       flex: 1;
       min-width: 140px;
     }
-    .meta-lbl {
-      font-size: 0.67rem;
-      text-transform: uppercase;
-      letter-spacing: 0.07em;
-      color: var(--muted);
-    }
+    .meta-lbl { font-size: 0.67rem; letter-spacing: 0.07em; }
     .meta-input {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -391,19 +383,24 @@
         hsl(270,100%,50%), hsl(300,100%,50%), hsl(330,100%,50%),
         hsl(360,100%,50%));
     }
+    #cpHueSlider {
+      --thumb-size: 16px;
+      --thumb-bg: #fff;
+      --thumb-border: 2px solid #888;
+    }
     #cpHueSlider::-webkit-slider-thumb {
       -webkit-appearance: none;
-      width: 16px; height: 16px;
+      width: var(--thumb-size); height: var(--thumb-size);
       border-radius: 50%;
-      background: #fff;
-      border: 2px solid #888;
+      background: var(--thumb-bg);
+      border: var(--thumb-border);
       cursor: pointer;
     }
     #cpHueSlider::-moz-range-thumb {
-      width: 16px; height: 16px;
+      width: var(--thumb-size); height: var(--thumb-size);
       border-radius: 50%;
-      background: #fff;
-      border: 2px solid #888;
+      background: var(--thumb-bg);
+      border: var(--thumb-border);
       cursor: pointer;
     }
     #cpHexDisplay {
@@ -499,11 +496,16 @@
       display: flex;
       flex-direction: column;
     }
+    #tieupBorder {
+      border: 1px solid var(--accent);
+      background: color-mix(in srgb, var(--accent) 6%, transparent);
+      border-radius: 4px;
+      padding: 3px;
+      display: inline-block;
+    }
     .panel-label {
       font-size: 0.65rem;
-      text-transform: uppercase;
       letter-spacing: 0.07em;
-      color: var(--muted);
       margin-bottom: 3px;
       text-align: center;
     }
@@ -531,7 +533,7 @@
 
     /* ── Error ── */
     .error {
-      background: rgba(224,92,110,0.1);
+      background: color-mix(in srgb, var(--accent) 10%, transparent);
       border: 1px solid var(--accent);
       border-radius: 6px;
       padding: 0.75rem 1rem;

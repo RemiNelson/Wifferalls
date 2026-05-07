@@ -22,6 +22,7 @@ let cpHue = 0, cpSat = 100, cpVal = 100, cpDragging = false;
 
 // Undo history: array of { warp, weft } color snapshots
 const colorHistory = [];
+const MAX_HISTORY = 50;
 
 // Cached render state for hit-testing during painting
 let paintDraft   = null;
@@ -45,6 +46,10 @@ let structureEditMode  = false;
 let selectedThreadingCol = null; // 1-based selected threading column
 let selectedTreadlingRow = null; // 1-based selected treadling row
 let suppressRemoveConfirm = false; // session flag: skip remove confirmation
+
+// Canvas ID lists — defined once so a typo can't silently break cursor/overlay logic
+const PAINT_CANVASES = ['cThreading', 'cDrawdown', 'cTreadling'];
+const ALL_CANVASES   = ['cThreading', 'cTieup', 'cDrawdown', 'cTreadling'];
 
 const dropZone  = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
@@ -663,8 +668,9 @@ function renderDraft() {
 
   // Theme colors — swap to light palette when rendering for print
   const BG        = printMode ? '#ffffff'            : '#0c0d14';
-  const GRID_COL  = printMode ? 'rgba(0,0,0,0.12)'  : 'rgba(255,255,255,0.1)';
-  const MARK_COL  = '#e05c6e';
+  const GRID_COL        = printMode ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.1)';
+  const GRID_COL_STRUCT = printMode ? 'rgba(0,0,0,0.4)'  : 'rgba(255,255,255,0.4)';
+  const MARK_COL  = printMode ? '#2d6b50' : '#a8d8be';
   const LBL_COL   = printMode ? 'rgba(50,50,70,0.7)': 'rgba(180,185,210,0.55)';
   const EMPTY     = BG;
 
@@ -673,10 +679,10 @@ function renderDraft() {
     ctx.fillRect(0, 0, w, h);
   }
 
-  function drawGridLines(ctx, cols, rows, xOff, yOff) {
+  function drawGridLines(ctx, cols, rows, xOff, yOff, color = GRID_COL, lw = 0.5) {
     ctx.save();
-    ctx.strokeStyle = GRID_COL;
-    ctx.lineWidth   = 0.5;
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = lw;
     for (let c = 0; c <= cols; c++) {
       const x = xOff + c * cs + 0.5;
       ctx.beginPath(); ctx.moveTo(x, yOff); ctx.lineTo(x, yOff + rows * cs); ctx.stroke();
@@ -730,20 +736,11 @@ function renderDraft() {
       if (sh < 1 || sh > S) continue;
       const row = S - sh;
       const y   = row * cs;
-      const cx  = x + cs / 2, cy = y + cs / 2, rad = cs * 0.42;
-      // Filled circle with radial gradient to look like thread cross-section
-      const rg = tCtx.createRadialGradient(cx - rad * 0.3, cy - rad * 0.3, 0, cx, cy, rad);
-      const c = v => Math.min(255, Math.max(0, Math.round(v)));
-      rg.addColorStop(0,   `rgb(${c(wr*1.6)},${c(wg*1.6)},${c(wb*1.6)})`);
-      rg.addColorStop(0.5, `rgb(${wr},${wg},${wb})`);
-      rg.addColorStop(1,   `rgb(${c(wr*.35)},${c(wg*.35)},${c(wb*.35)})`);
-      tCtx.beginPath();
-      tCtx.arc(cx, cy, rad, 0, Math.PI * 2);
-      tCtx.fillStyle = rg;
-      tCtx.fill();
+      tCtx.fillStyle = `rgb(${wr},${wg},${wb})`;
+      tCtx.fillRect(x, y, cs, cs);
     }
   }
-  if (showGrid) drawGridLines(tCtx, W, S, txOff, 0);
+  if (showGrid) drawGridLines(tCtx, W, S, txOff, 0, GRID_COL_STRUCT, 1);
   drawShaftLabels(tCtx, S, txOff, 0);
 
   // ── TIEUP ──────────────────────────────────────────────
@@ -759,7 +756,7 @@ function renderDraft() {
         uCtx.fillRect(col * cs, row * cs, cs, cs);
       }
     }
-    if (showGrid) drawGridLines(uCtx, T, S, 0, 0);
+    if (showGrid) drawGridLines(uCtx, T, S, 0, 0, GRID_COL_STRUCT, 1);
   }
 
   // ── DRAWDOWN ───────────────────────────────────────────
@@ -873,7 +870,7 @@ function renderDraft() {
         rCtx.fillRect(col * cs, row * cs, cs, cs);
       }
     }
-    if (showGrid) drawGridLines(rCtx, T, E, 0, 0);
+    if (showGrid) drawGridLines(rCtx, T, E, 0, 0, GRID_COL_STRUCT, 1);
   }
 
   // Drawdown left label: use it for weft pick numbers in lieu of a weft color bar
@@ -1633,7 +1630,7 @@ async function exportPDF() {
 // ── Overlay canvases (positioned on top of each painting canvas) ──────────
 
 function setupOverlays() {
-  ['cThreading', 'cTieup', 'cDrawdown', 'cTreadling'].forEach(id => {
+  ALL_CANVASES.forEach(id => {
     const main = document.getElementById(id);
     // Wrap the canvas itself so the overlay aligns with the canvas,
     // not with the panel-wrap (which may include a label above the canvas).
@@ -1781,7 +1778,7 @@ function setActiveColor(hex) {
   document.querySelectorAll('.swatch').forEach(s => {
     s.classList.toggle('selected', s.dataset.color === hex);
   });
-  ['cThreading', 'cDrawdown', 'cTreadling'].forEach(id => {
+  PAINT_CANVASES.forEach(id => {
     if (structureEditMode && (id === 'cThreading' || id === 'cTreadling')) return;
     document.getElementById(id).style.cursor = 'crosshair';
   });
@@ -1901,7 +1898,7 @@ function selectPaletteColor(el) {
     el.classList.remove('selected');
     selectedColor = null;
     clearAllOverlays();
-    ['cThreading', 'cDrawdown', 'cTreadling'].forEach(id => {
+    PAINT_CANVASES.forEach(id => {
       if (structureEditMode && (id === 'cThreading' || id === 'cTreadling')) return;
       document.getElementById(id).style.cursor = '';
     });
@@ -1913,13 +1910,12 @@ function selectPaletteColor(el) {
 function toggleEyedropper() {
   eyedropperActive = !eyedropperActive;
   document.getElementById('eyedropperBtn').classList.toggle('active', eyedropperActive);
-  const all = ['cThreading', 'cTieup', 'cDrawdown', 'cTreadling'];
   if (eyedropperActive) {
-    all.forEach(id => { const el = document.getElementById(id); if (el) el.style.cursor = 'crosshair'; });
+    ALL_CANVASES.forEach(id => { const el = document.getElementById(id); if (el) el.style.cursor = 'crosshair'; });
   } else {
-    all.forEach(id => { const el = document.getElementById(id); if (el) el.style.cursor = ''; });
+    ALL_CANVASES.forEach(id => { const el = document.getElementById(id); if (el) el.style.cursor = ''; });
     if (selectedColor) {
-      ['cThreading', 'cDrawdown', 'cTreadling'].forEach(id => {
+      PAINT_CANVASES.forEach(id => {
         document.getElementById(id).style.cursor = 'crosshair';
       });
     }
@@ -1962,7 +1958,7 @@ function pushHistory() {
     for (const [k, v] of Object.entries(editableTieup)) snap.tieup[k] = v.slice();
   }
   colorHistory.push(snap);
-  if (colorHistory.length > 50) colorHistory.shift();
+  if (colorHistory.length > MAX_HISTORY) colorHistory.shift();
 }
 
 function undo() {
@@ -2494,7 +2490,7 @@ async function removeTreadlingRows() {
   }
 
   // Eyedropper: registered first so stopImmediatePropagation blocks the paint handler.
-  ['cThreading', 'cTieup', 'cDrawdown', 'cTreadling'].forEach(id => {
+  ALL_CANVASES.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener('mousedown', e => {
@@ -2506,7 +2502,7 @@ async function removeTreadlingRows() {
   });
 
   // Painting canvases
-  ['cThreading', 'cDrawdown', 'cTreadling'].forEach(id => {
+  PAINT_CANVASES.forEach(id => {
     const el = document.getElementById(id);
 
     el.addEventListener('mousedown', e => {
@@ -2613,10 +2609,8 @@ async function removeTreadlingRows() {
     });
   }
   document.addEventListener('mousemove', e => {
-    if (!cpDragging) return;
-    const grad = document.getElementById('cpGradient');
-    if (!grad) return;
-    const rect = grad.getBoundingClientRect();
+    if (!cpDragging || !cpGrad) return;
+    const rect = cpGrad.getBoundingClientRect();
     cpSat = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width)  * 100));
     cpVal = Math.max(0, Math.min(100, (1 - (e.clientY - rect.top) / rect.height) * 100));
     cpUpdateCursor();
