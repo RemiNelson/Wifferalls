@@ -144,7 +144,7 @@ function startNewDraft() {
   wifData['COLOR PALETTE'] = { 'ENTRIES': '10', 'FORM': 'RGB', 'RANGE': '0,255' };
   wifData['COLOR TABLE']   = {
     '1':  '255,255,255',
-    '2':  '28,28,32',
+    '2':  '192,104,64',
     '3':  '210,40,40',
     '4':  '220,110,20',
     '5':  '210,185,15',
@@ -348,7 +348,7 @@ function extractDraft() {
   }
 
   const warpDefaultColor = resolveDefaultColor('WARP', '#ffffff');
-  const weftDefaultColor = resolveDefaultColor('WEFT', '#2c2c2c');
+  const weftDefaultColor = resolveDefaultColor('WEFT', '#c06840');
 
   // ── Per-thread colors ─────────────────────────────
   function buildThreadColors(count, colorsSec, defaultColor) {
@@ -2411,7 +2411,7 @@ function addTreadlingRows() {
   const count = Math.max(1, parseInt(document.getElementById('treadlingAddCount').value) || 1);
   const E     = editableWeftThreads;
   const after = selectedTreadlingRow;
-  const inheritColor = selectedColor || editableWeftColors[after] || (paintDraft && paintDraft.weftDefaultColor) || '#2c2c2c';
+  const inheritColor = selectedColor || editableWeftColors[after] || (paintDraft && paintDraft.weftDefaultColor) || '#c06840';
 
   pushHistory();
 
