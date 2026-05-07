@@ -81,7 +81,7 @@ Use the controls bar (sticks to the top as you scroll) to adjust **cell size**, 
 
 ### 4. Edit threading, treadling, and tie-up
 
-1. Check **Edit threading / treadling** in the controls bar.
+1. Click **Edit threading / treadling** in the controls bar (it highlights when active).
 2. Click any cell in the **Threading** panel to toggle that warp end on or off the corresponding shaft.
 3. Click any cell in the **Treadling** panel to toggle that weft pick on or off the corresponding treadle.
 4. Click any cell in the **Tie-up** panel to toggle which shafts that treadle raises. The Drawdown updates immediately.

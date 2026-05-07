@@ -104,17 +104,13 @@ function resetApp() {
   editableTieup        = null;
   editableWarpThreads  = null;
   editableWeftThreads  = null;
-  structureEditMode    = false;
   selectedThreadingCol = null;
   selectedTreadlingRow = null;
-  updateThreadingColDisplay();
-  updateTreadlingRowDisplay();
   selectedColor = null;
   paintDraft = null;
   colorHistory.length = 0;
   eyedropperActive = false;
-  const editStructureCheck = document.getElementById('editStructure');
-  if (editStructureCheck) editStructureCheck.checked = false;
+  setStructureEditMode(false);
   fileInput.value = '';
   document.getElementById('app').style.display = 'none';
   document.getElementById('uploadArea').style.display = 'flex';
@@ -1206,19 +1202,19 @@ function showPDFLayoutDialog(numColPages, numRowPages) {
     const box = document.createElement('div');
     box.style.cssText = 'background:#1c1e2b;border:1px solid #2e3048;border-radius:12px;padding:1.75rem 2rem;max-width:400px;width:90%;font-family:system-ui,-apple-system,sans-serif;font-size:14px;color:#dde1f5;';
     box.innerHTML = `
-      <h3 style="margin:0 0 0.4rem;font-size:1rem;font-weight:700;color:#e05c6e;">Draft too wide for one page</h3>
-      <p style="margin:0 0 1.25rem;font-size:0.82rem;color:#7a7f9a;line-height:1.5;">The full warp doesn’t fit on a single landscape A4 page at the smallest cell size. How would you like to export?</p>
+      <h3 style="margin:0 0 0.4rem;font-size:1rem;font-weight:700;color:#a8d8be;">Draft too wide for one page</h3>
+      <p style="margin:0 0 1.25rem;font-size:0.82rem;color:#8b90ab;line-height:1.5;">The full warp doesn’t fit on a single landscape A4 page at the smallest cell size. How would you like to export?</p>
       <div style="display:flex;flex-direction:column;gap:0.6rem;margin-bottom:1.25rem;">
         <button id="dlgFit" style="text-align:left;background:transparent;border:1px solid #2e3048;border-radius:8px;padding:0.75rem 1rem;cursor:pointer;color:inherit;">
           <div style="font-weight:600;font-size:0.88rem;margin-bottom:0.15rem;">Fit to page</div>
-          <div style="font-size:0.75rem;color:#7a7f9a;">Show as many complete warp repeats as fit; drop the rest.</div>
+          <div style="font-size:0.75rem;color:#8b90ab;">Show as many complete warp repeats as fit; drop the rest.</div>
         </button>
         <button id="dlgGrid" style="text-align:left;background:transparent;border:1px solid #2e3048;border-radius:8px;padding:0.75rem 1rem;cursor:pointer;color:inherit;">
           <div style="font-weight:600;font-size:0.88rem;margin-bottom:0.15rem;">Grid layout <span style="color:#7b8cde;">${numColPages}×${numRowPages} sheets</span></div>
-          <div style="font-size:0.75rem;color:#7a7f9a;">Tile the complete draft across ${numColPages * numRowPages} pages to print and piece together.</div>
+          <div style="font-size:0.75rem;color:#8b90ab;">Tile the complete draft across ${numColPages * numRowPages} pages to print and piece together.</div>
         </button>
       </div>
-      <button id="dlgCancel" style="background:none;border:none;color:#7a7f9a;font-size:0.8rem;cursor:pointer;padding:0;">Cancel</button>
+      <button id="dlgCancel" style="background:none;border:none;color:#8b90ab;font-size:0.8rem;cursor:pointer;padding:0;">Cancel</button>
     `;
     overlay.appendChild(box);
     document.body.appendChild(overlay);
@@ -2101,6 +2097,8 @@ function commitPaint() {
 
 function setStructureEditMode(enabled) {
   structureEditMode = enabled;
+  const editBtn = document.getElementById('editStructureBtn');
+  if (editBtn) editBtn.classList.toggle('active', enabled);
   const elT = document.getElementById('cThreading');
   const elR = document.getElementById('cTreadling');
   const elU = document.getElementById('cTieup');
@@ -2318,14 +2316,14 @@ function showRemoveConfirmDialog(what, fromPos, count) {
       ? `1 ${what.replace(/s$/, '')} at position ${fromPos}`
       : `${count} ${what} starting at position ${fromPos}`;
     box.innerHTML = `
-      <h3 style="margin:0 0 0.5rem;font-size:0.95rem;font-weight:700;color:#e05c6e;">Confirm remove</h3>
-      <p style="margin:0 0 1rem;font-size:0.85rem;color:#7a7f9a;line-height:1.5;">Remove ${label}? This can be undone with Ctrl+Z.</p>
-      <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.8rem;color:#7a7f9a;margin-bottom:1.1rem;cursor:pointer;">
+      <h3 style="margin:0 0 0.5rem;font-size:0.95rem;font-weight:700;color:#a8d8be;">Confirm remove</h3>
+      <p style="margin:0 0 1rem;font-size:0.85rem;color:#8b90ab;line-height:1.5;">Remove ${label}? This can be undone with Ctrl+Z.</p>
+      <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.8rem;color:#8b90ab;margin-bottom:1.1rem;cursor:pointer;">
         <input type="checkbox" id="noConfirmChk"> Don't ask again this session
       </label>
       <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
-        <button id="dlgCancel" style="background:transparent;border:1px solid #2e3048;border-radius:6px;padding:0.3rem 0.9rem;font-size:0.8rem;color:#7a7f9a;cursor:pointer;">Cancel</button>
-        <button id="dlgConfirm" style="background:#e05c6e;border:none;border-radius:6px;padding:0.3rem 0.9rem;font-size:0.8rem;font-weight:600;color:#fff;cursor:pointer;">Remove</button>
+        <button id="dlgCancel" style="background:transparent;border:1px solid #2e3048;border-radius:6px;padding:0.3rem 0.9rem;font-size:0.8rem;color:#8b90ab;cursor:pointer;">Cancel</button>
+        <button id="dlgConfirm" style="background:#e05c6e;border:none;border-radius:6px;padding:0.3rem 0.9rem;font-size:0.8rem;font-weight:600;color:#12131a;cursor:pointer;">Remove</button>
       </div>
     `;
     overlay.appendChild(box);
