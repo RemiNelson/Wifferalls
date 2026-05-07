@@ -750,6 +750,23 @@ function renderDraft() {
     }
   }
   if (showGrid) drawGridLines(tCtx, W, S, txOff, 0, GRID_COL_STRUCT, 1);
+  if (printMode) {
+    const whitePath = new Path2D();
+    const bw = Math.max(2, Math.round(cs * 0.14));
+    const half = bw / 2;
+    for (let wi = 1; wi <= W; wi++) {
+      const [r, g, b] = parseRGB(editableWarpColors[wi] || d.warpDefaultColor);
+      if (r > 240 && g > 240 && b > 240) {
+        for (const sh of (d.threading[wi] || [])) {
+          if (sh < 1 || sh > S) continue;
+          whitePath.rect(txOff + (wi - 1) * cs + half, (S - sh) * cs + half, cs - bw, cs - bw);
+        }
+      }
+    }
+    tCtx.strokeStyle = '#000000';
+    tCtx.lineWidth = bw;
+    tCtx.stroke(whitePath);
+  }
   drawShaftLabels(tCtx, S, txOff, 0);
 
   // ── TIEUP ──────────────────────────────────────────────
@@ -903,6 +920,23 @@ function renderDraft() {
       }
     }
     if (showGrid) drawGridLines(rCtx, T, E, 0, 0, GRID_COL_STRUCT, 1);
+    if (printMode) {
+      const whitePath = new Path2D();
+      const bw = Math.max(2, Math.round(cs * 0.14));
+      const half = bw / 2;
+      for (let pick = 1; pick <= E; pick++) {
+        const [r, g, b] = parseRGB(editableWeftColors[pick] || d.weftDefaultColor);
+        if (r > 240 && g > 240 && b > 240) {
+          for (const tr of (d.treadling[pick] || [])) {
+            if (tr < 1 || tr > T) continue;
+            whitePath.rect((tr - 1) * cs + half, (pick - 1) * cs + half, cs - bw, cs - bw);
+          }
+        }
+      }
+      rCtx.strokeStyle = '#000000';
+      rCtx.lineWidth = bw;
+      rCtx.stroke(whitePath);
+    }
   }
 
   // Drawdown left label: use it for weft pick numbers in lieu of a weft color bar
@@ -971,9 +1005,9 @@ function threadGrad(ctx, x1, y1, x2, y2, r, g, b) {
   const g_ = ctx.createLinearGradient(x1, y1, x2, y2);
   const c = v => Math.min(255, Math.max(0, Math.round(v)));
   g_.addColorStop(0,    `rgb(${c(r*.42)},${c(g*.42)},${c(b*.42)})`);
-  g_.addColorStop(0.28, `rgb(${c(r*.78)},${c(g*.78)},${c(b*.78)})`);
-  g_.addColorStop(0.5,  `rgb(${c(r*1.5)},${c(g*1.5)},${c(b*1.5)})`);
-  g_.addColorStop(0.72, `rgb(${c(r*.78)},${c(g*.78)},${c(b*.78)})`);
+  g_.addColorStop(0.12, `rgb(${c(r*1.0)},${c(g*1.0)},${c(b*1.0)})`);
+  g_.addColorStop(0.5,  `rgb(${c(r*1.2)},${c(g*1.2)},${c(b*1.2)})`);
+  g_.addColorStop(0.88, `rgb(${c(r*1.0)},${c(g*1.0)},${c(b*1.0)})`);
   g_.addColorStop(1,    `rgb(${c(r*.42)},${c(g*.42)},${c(b*.42)})`);
   return g_;
 }
