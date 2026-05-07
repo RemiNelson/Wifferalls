@@ -1,6 +1,6 @@
 # Wifferalls - Viewing and editing WIFS for all!
 
-A browser-based viewer and editor for **Weaving Information Files** (WIF 1.0 / 1.1). Open a `.wif` file, inspect the draft, edit thread colours and structure, and export a finished file — no installation or server required.
+A browser-based viewer and editor for **Weaving Information Files** (WIF 1.0 / 1.1). Open a `.wif` file or start a new draft from scratch, inspect the draft, edit thread colours and structure, and export a finished file — no installation or server required.
 
 ---
 
@@ -13,17 +13,27 @@ A browser-based viewer and editor for **Weaving Information Files** (WIF 1.0 / 1
 - Shows any notes embedded in the WIF file
 - Auto-fits the draft to the viewport on load; adjustable cell size (2 – 32 px) via slider
 
+### New draft creation
+- Start from a blank canvas — no WIF file required
+- Configure **ends** (warp threads), **picks** (weft threads), **shafts**, and **treadles**
+- Choose a **starting pattern**: Blank, Plain weave, or Twill
+- Set **rising shed** or sinking shed at creation time
+- The new draft opens with a starter palette and is immediately editable
+
 ### Colour editing
 - Full **colour palette** built from the WIF colour table, shown as clickable swatches
+- Swatch tooltips show the CSS colour name where one exists, otherwise the hex code
 - **Paint** warp or weft threads by clicking or dragging across the Threading, Drawdown, or Treadling canvas
 - **Eyedropper** tool to sample any colour already on the draft
-- Custom colour via the native **colour picker**
+- **Custom colour picker** — click the colour swatch button to open a gradient picker; drag across the saturation/brightness area and release to select and close; use the hue strip to change hue without closing; press Escape or click outside to dismiss
+- Colours chosen from the picker and applied to the draft are **automatically added to the palette**
 - **Undo** (Ctrl + Z) — up to 50 steps, covering both colour and structure changes
 
 ### Structure editing
-- Toggle **Edit threading / treadling** mode to reassign shaft and treadle connections
-- Click any threading cell to toggle which shaft that warp end is threaded on
-- Click any treadling cell to toggle which treadle that weft pick activates
+- Toggle **Edit threading / treadling** mode to reassign shaft, treadle, and tie-up connections
+- Click any **Threading** cell to toggle which shaft that warp end is threaded on
+- Click any **Treadling** cell to toggle which treadle that weft pick activates
+- Click any **Tie-up** cell to toggle which shafts a treadle raises — the drawdown updates immediately
 - **Add or remove** threading columns (warp ends) and treadling rows (weft picks):
   - Click a column or row to select it (highlighted in blue)
   - Enter a count and press **+** to insert that many columns/rows immediately after the selection
@@ -38,9 +48,11 @@ A browser-based viewer and editor for **Weaving Information Files** (WIF 1.0 / 1
 
 ## Quickstart
 
-### 1. Open a file
+### 1. Open or create a draft
 
-Drag and drop a `.wif` file onto the drop zone, or click **Choose File** to browse. The draft renders automatically and the view zooms to fit your screen.
+**From a file** — drag and drop a `.wif` file onto the drop zone, or click **Choose File** to browse. The draft renders automatically and the view zooms to fit your screen.
+
+**From scratch** — fill in the **New Draft** form on the right: set your end and pick counts, shaft and treadle counts, pick a starting pattern, and click **Create Draft**.
 
 ### 2. Navigate the draft
 
@@ -55,16 +67,25 @@ Use the controls bar (sticks to the top as you scroll) to adjust **cell size**, 
 
 ### 3. Change thread colours
 
-1. Click a swatch in the **Color Palette** bar, or use the colour picker for a custom colour, or click **Sample** then click any point on the draft to pick that colour.
-2. Click or click-drag across the **Threading** canvas to repaint warp threads, or across the **Treadling** / **Drawdown** canvas to repaint weft picks.
+1. Click a swatch in the **Color Palette** bar to select that colour, or open the **colour picker** for a custom colour, or click **Sample** then click any point on the draft to pick that colour.
+2. Click or click-drag across the **Threading** canvas to repaint warp threads, or across the **Treadling** / **Drawdown** canvas to repaint weft picks. Any custom colour you apply is automatically added to the palette.
 3. Press **Ctrl + Z** (or click **Undo**) to step back.
 
-### 4. Edit threading and treadling structure
+#### Using the colour picker
+
+- Click the coloured square button to open the picker popover.
+- Drag anywhere on the **gradient area** — the button and hex readout update live as you drag.
+- **Release the mouse** to commit the colour and close the picker automatically.
+- Use the **hue strip** below the gradient to shift the hue without closing.
+- Click outside the picker or press **Escape** to dismiss without committing.
+
+### 4. Edit threading, treadling, and tie-up
 
 1. Check **Edit threading / treadling** in the controls bar.
-2. Click any cell in the **Threading** panel to toggle that warp end on or off the corresponding shaft. The **Drawdown** updates immediately.
+2. Click any cell in the **Threading** panel to toggle that warp end on or off the corresponding shaft.
 3. Click any cell in the **Treadling** panel to toggle that weft pick on or off the corresponding treadle.
-4. The selected column/row is highlighted in blue and shown in the controls bar.
+4. Click any cell in the **Tie-up** panel to toggle which shafts that treadle raises. The Drawdown updates immediately.
+5. The selected column/row is highlighted in blue and shown in the controls bar.
 
 ### 5. Add or remove columns and rows
 
