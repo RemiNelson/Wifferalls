@@ -293,6 +293,17 @@
       cursor: pointer;
       flex-shrink: 0;
     }
+    .meta-shed-sel {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 4px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      width: 100%;
+    }
+    .meta-shed-sel:focus { outline: none; border-color: var(--accent2); }
 
     /* ── Notes ── */
     .notes-box {

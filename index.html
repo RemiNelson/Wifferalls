@@ -66,10 +66,13 @@
             <option value="herringbone">Herringbone</option>
           </select>
         </label>
-        <label class="nd-checkbox-row toggle-label">
-          <input type="checkbox" id="ndRisingShed" checked>
-          <span class="toggle-track"><span class="toggle-thumb"></span></span>
-          <span class="nd-lbl">Rising shed</span>
+        <label class="nd-field" style="width:100%;max-width:none;">
+          <span class="nd-lbl">Shed type</span>
+          <select id="ndShedMode" class="nd-input">
+            <option value="rising" selected>Rising shed</option>
+            <option value="sinking">Sinking shed</option>
+            <option value="liftplan">Liftplan</option>
+          </select>
         </label>
         <button class="btn" type="submit">Create Draft</button>
       </form>
