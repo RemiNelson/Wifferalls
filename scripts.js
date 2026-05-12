@@ -36,12 +36,13 @@ let paintLblSize = 0;
 let printMode = false;
 
 // Editable metadata (text fields + rising shed)
-let editableMeta = null; // { title, author, email, notes, risingShed }
+let editableMeta = null; // { title, author, email, notes, risingShed, liftplan }
 
 // Editable threading/treadling/tieup structure (1-indexed)
 let editableThreading  = null; // warpThread → [shafts]
 let editableTreadling  = null; // weftPick → [treadles]
 let editableTieup      = null; // treadle → [shafts]
+let editableLiftplan   = null; // weftPick → [shafts raised] — only used in liftplan mode
 let editableWarpThreads = null; // overrides d.warpThreads when set
 let editableWeftThreads = null; // overrides d.weftThreads when set
 let structureEditMode  = false;
@@ -111,6 +112,7 @@ function resetApp() {
   editableThreading    = null;
   editableTreadling    = null;
   editableTieup        = null;
+  editableLiftplan     = null;
   editableWarpThreads  = null;
   editableWeftThreads  = null;
   selectedThreadingCol = null;
@@ -135,10 +137,13 @@ function startNewDraft() {
   const picks      = Math.max(1, parseInt(document.getElementById('ndPicks').value)    || 24);
   const shafts     = Math.max(1, parseInt(document.getElementById('ndShafts').value)   || 4);
   const treadles   = Math.max(1, parseInt(document.getElementById('ndTreadles').value) || 6);
-  const risingShed = document.getElementById('ndRisingShed').checked;
+  const shedSel    = document.getElementById('ndShedMode').value;
+  const risingShed = shedSel !== 'sinking';
+  const liftplan   = shedSel === 'liftplan';
   const pattern    = document.getElementById('ndPattern').value;
 
-  editableMeta = { title: '', author: '', notes: '', risingShed };
+  editableMeta     = { title: '', author: '', notes: '', risingShed, liftplan };
+  editableLiftplan = null;
 
   wifData = Object.create(null);
   wifData['WIF']           = { 'VERSION': '1.1' };
@@ -483,11 +488,13 @@ function buildMeta() {
     const notesSec = getSection('NOTES');
     const noteKeys = Object.keys(notesSec)
       .map(k => parseInt(k, 10)).filter(n => !isNaN(n)).sort((a, b) => a - b);
+    const d0 = extractDraft();
     editableMeta = {
       title:      textSec['TITLE']  || '',
       author:     textSec['AUTHOR'] || '',
       notes:      noteKeys.map(k => notesSec[String(k)]).join('\n'),
       risingShed: parseBool(weavingSec['RISING SHED']),
+      liftplan:   d0.hasLiftplan,
     };
   }
 
@@ -506,8 +513,12 @@ function buildMeta() {
     `<div class="info-card"><div class="lbl">Warp float</div><div class="val" id="floatWarpVal">—</div></div>` +
     `<div class="info-card"><div class="lbl">Weft float</div><div class="val" id="floatWeftVal">—</div></div>`;
 
-  const rsChecked = editableMeta.risingShed ? ' checked' : '';
-  const rsLabel   = editableMeta.risingShed ? 'Yes' : 'No';
+  const shedVal  = editableMeta.liftplan ? 'liftplan' : (editableMeta.risingShed ? 'rising' : 'sinking');
+  const shedOpts = [
+    ['rising',   'Rising shed'],
+    ['sinking',  'Sinking shed'],
+    ['liftplan', 'Liftplan'],
+  ].map(([v, l]) => `<option value="${v}"${shedVal === v ? ' selected' : ''}>${l}</option>`).join('');
 
   document.getElementById('metaSection').innerHTML = `
     <div class="section-label">Draft Information</div>
@@ -523,13 +534,12 @@ function buildMeta() {
     </div>
     <div class="info-grid">
       ${cardsHtml}
-      <label class="info-card meta-rising-shed" title="Rising shed: raised shafts bring warp threads to the top">
-        <div class="lbl">Rising shed</div>
-        <div class="val meta-rs-val">
-          <input type="checkbox" id="metaRisingShed"${rsChecked} onchange="onRisingShedChange(this.checked)">
-          <span id="risingShedLbl">${rsLabel}</span>
+      <div class="info-card">
+        <div class="lbl">Shed type</div>
+        <div class="val">
+          <select id="metaShedSel" class="meta-shed-sel" onchange="onShedSelChange(this.value)">${shedOpts}</select>
         </div>
-      </label>
+      </div>
     </div>`;
 
   // Bind text field changes (elements are freshly created via innerHTML above)
@@ -603,7 +613,8 @@ function computeAutoFitCellSize() {
 function renderDraft() {
   if (!wifData) return;
 
-  const d         = extractDraft();
+  const d           = extractDraft();
+  const isLiftplan  = !!(editableMeta ? editableMeta.liftplan : d.hasLiftplan);
   if (editableMeta) d.risingShed = editableMeta.risingShed;
   const cs        = cellSize;
   const showGrid  = document.getElementById('showGrid').checked;
@@ -614,7 +625,10 @@ function renderDraft() {
   const W = editableWarpThreads;
   const E = editableWeftThreads;
   const S = d.shafts;
-  const T = d.hasLiftplan ? 0 : d.treadles;
+  // tieupCols: 0 hides the tieup panel; panelCols: columns in the treadling/liftplan panel
+  const tieupCols  = isLiftplan ? 0 : d.treadles;
+  const panelCols  = isLiftplan ? S : d.treadles;
+  const T          = panelCols; // alias kept for dimension calculations below
 
   // Label column/row size
   const lblSize = (showLbls && cs >= 8) ? Math.max(16, cs) : 0;
@@ -641,7 +655,26 @@ function renderDraft() {
 
   // Apply editable structure to the working draft
   d.threading = editableThreading;
-  if (!d.hasLiftplan) {
+  if (isLiftplan) {
+    // Seed editableLiftplan once
+    if (!editableLiftplan) {
+      editableLiftplan = Object.create(null);
+      if (d.hasLiftplan) {
+        // Load from WIF liftplan section
+        for (let p = 1; p <= E; p++) editableLiftplan[p] = (d.liftplan[p] || []).slice();
+      } else {
+        // Derive from tieup+treadling (new draft with a starting pattern)
+        for (let p = 1; p <= E; p++) {
+          const trs = editableTreadling[p] || [];
+          const raised = new Set();
+          for (const tr of trs) for (const sh of (editableTieup[tr] || [])) raised.add(sh);
+          if (raised.size > 0) editableLiftplan[p] = [...raised].sort((a, b) => a - b);
+        }
+      }
+    }
+    d.hasLiftplan     = true;
+    d.getRaisedShafts = pickIdx => new Set(editableLiftplan[pickIdx] || []);
+  } else if (!d.hasLiftplan) {
     d.tieup     = editableTieup;
     d.treadling = editableTreadling;
     d.getRaisedShafts = (pickIdx) => {
@@ -656,6 +689,8 @@ function renderDraft() {
   paintDraft             = d;
   paintDraft.warpThreads = W;
   paintDraft.weftThreads = E;
+  paintDraft.isLiftplan  = isLiftplan;
+  paintDraft.panelCols   = panelCols;
   paintLblSize           = lblSize;
 
   // Canvas pixel dimensions (including optional label strips)
@@ -663,16 +698,16 @@ function renderDraft() {
   // The label col for shaft numbers sits on the left; label row on top for thread numbers (optional at small sizes)
   const threadingW = W * cs + (lblSize > 0 ? lblSize : 0);
   const threadingH = S * cs;
-  const tieupW     = T > 0 ? (T * cs)  : 0;
+  const tieupW     = tieupCols > 0 ? (tieupCols * cs) : 0;
   const tieupH     = S * cs;
   const drawdownW  = W * cs + (lblSize > 0 ? lblSize : 0);
   const drawdownH  = E * cs;
-  const treadlingW = T > 0 ? (T * cs)  : 0;
+  const treadlingW = panelCols > 0 ? (panelCols * cs) : 0;
   const treadlingH = E * cs;
 
-  // Show/hide tieup+treadling panels when using liftplan
-  document.getElementById('tieupWrap').style.display     = T > 0 ? '' : 'none';
-  document.getElementById('treadlingWrap').style.display = T > 0 ? '' : 'none';
+  // Show/hide tieup + treadling/liftplan panels
+  document.getElementById('tieupWrap').style.display     = tieupCols > 0 ? '' : 'none';
+  document.getElementById('treadlingWrap').style.display = panelCols > 0 ? '' : 'none';
 
   // Helper: size a canvas
   function prep(id, w, h) {
@@ -690,9 +725,9 @@ function renderDraft() {
   const rCtx = prep('cTreadling', treadlingW, treadlingH);
 
   document.getElementById('cThreading').setAttribute('aria-label', `Threading: ${W} ends across ${S} shafts`);
-  document.getElementById('cTieup').setAttribute('aria-label',     `Tie-up: ${T} treadles × ${S} shafts`);
+  document.getElementById('cTieup').setAttribute('aria-label',     `Tie-up: ${tieupCols} treadles × ${S} shafts`);
   document.getElementById('cDrawdown').setAttribute('aria-label',  `Drawdown: ${W} ends × ${E} picks`);
-  document.getElementById('cTreadling').setAttribute('aria-label', `Treadling: ${E} picks across ${T} treadles`);
+  document.getElementById('cTreadling').setAttribute('aria-label', isLiftplan ? `Liftplan: ${E} picks × ${S} shafts` : `Treadling: ${E} picks across ${panelCols} treadles`);
   syncOverlaySize('cThreading');
   syncOverlaySize('cTieup');
   syncOverlaySize('cDrawdown');
@@ -959,38 +994,64 @@ function renderDraft() {
     if (weftEl) weftEl.textContent = maxWeftFloat > 0 ? String(maxWeftFloat) : '—';
   }
 
-  // ── TREADLING ──────────────────────────────────────────
-  if (T > 0) {
+  // ── TREADLING / LIFTPLAN ───────────────────────────────
+  if (panelCols > 0) {
     clearCanvas(rCtx, treadlingW, treadlingH);
 
-    for (let pick = 1; pick <= E; pick++) {
-      const treadles = d.treadling[pick] || [];
-      const weftColor = editableWeftColors[pick] || d.weftDefaultColor;
-      const row       = pick - 1;
-      for (const tr of treadles) {
-        if (tr < 1 || tr > T) continue;
-        const col = tr - 1;
-        rCtx.fillStyle = weftColor;
-        rCtx.fillRect(col * cs, row * cs, cs, cs);
-      }
-    }
-    if (showGrid) drawGridLines(rCtx, T, E, 0, 0, GRID_COL_STRUCT, 1);
-    if (printMode) {
-      const whitePath = new Path2D();
-      const bw = Math.max(2, Math.round(cs * 0.14));
-      const half = bw / 2;
+    if (isLiftplan) {
       for (let pick = 1; pick <= E; pick++) {
-        const [r, g, b] = parseRGB(editableWeftColors[pick] || d.weftDefaultColor);
-        if (r > 240 && g > 240 && b > 240) {
-          for (const tr of (d.treadling[pick] || [])) {
-            if (tr < 1 || tr > T) continue;
-            whitePath.rect((tr - 1) * cs + half, (pick - 1) * cs + half, cs - bw, cs - bw);
-          }
+        const shafts    = editableLiftplan[pick] || [];
+        const weftColor = editableWeftColors[pick] || d.weftDefaultColor;
+        const row       = pick - 1;
+        for (const sh of shafts) {
+          if (sh < 1 || sh > S) continue;
+          rCtx.fillStyle = weftColor;
+          rCtx.fillRect((sh - 1) * cs, row * cs, cs, cs);
         }
       }
-      rCtx.strokeStyle = '#000000';
-      rCtx.lineWidth = bw;
-      rCtx.stroke(whitePath);
+      if (showGrid) drawGridLines(rCtx, S, E, 0, 0, GRID_COL_STRUCT, 1);
+      // Shaft column labels at top (reuse label style)
+      if (lblSize > 0) {
+        rCtx.save();
+        rCtx.fillStyle = LBL_COL;
+        const fs = Math.min(cs - 2, 9);
+        rCtx.font = `${fs}px sans-serif`;
+        rCtx.textAlign = 'center';
+        rCtx.textBaseline = 'middle';
+        for (let sh = 1; sh <= S; sh++) {
+          rCtx.fillText(sh, (sh - 1) * cs + cs / 2, cs / 2);
+        }
+        rCtx.restore();
+      }
+    } else {
+      for (let pick = 1; pick <= E; pick++) {
+        const treadles  = d.treadling[pick] || [];
+        const weftColor = editableWeftColors[pick] || d.weftDefaultColor;
+        const row       = pick - 1;
+        for (const tr of treadles) {
+          if (tr < 1 || tr > panelCols) continue;
+          rCtx.fillStyle = weftColor;
+          rCtx.fillRect((tr - 1) * cs, row * cs, cs, cs);
+        }
+      }
+      if (showGrid) drawGridLines(rCtx, panelCols, E, 0, 0, GRID_COL_STRUCT, 1);
+      if (printMode) {
+        const whitePath = new Path2D();
+        const bw = Math.max(2, Math.round(cs * 0.14));
+        const half = bw / 2;
+        for (let pick = 1; pick <= E; pick++) {
+          const [r, g, b] = parseRGB(editableWeftColors[pick] || d.weftDefaultColor);
+          if (r > 240 && g > 240 && b > 240) {
+            for (const tr of (d.treadling[pick] || [])) {
+              if (tr < 1 || tr > panelCols) continue;
+              whitePath.rect((tr - 1) * cs + half, (pick - 1) * cs + half, cs - bw, cs - bw);
+            }
+          }
+        }
+        rCtx.strokeStyle = '#000000';
+        rCtx.lineWidth = bw;
+        rCtx.stroke(whitePath);
+      }
     }
   }
 
@@ -1126,11 +1187,11 @@ function escAttr(s) {
   return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
 }
 
-function onRisingShedChange(checked) {
+function onShedSelChange(val) {
   if (!editableMeta) return;
-  editableMeta.risingShed = checked;
-  const lbl = document.getElementById('risingShedLbl');
-  if (lbl) lbl.textContent = checked ? 'Yes' : 'No';
+  editableMeta.risingShed = val !== 'sinking';
+  editableMeta.liftplan   = val === 'liftplan';
+  if (!editableMeta.liftplan) editableLiftplan = null;
   renderDraft();
 }
 
@@ -1190,6 +1251,7 @@ function serializeWIF() {
 
     if (!secs['WEAVING']) secs['WEAVING'] = {};
     secs['WEAVING']['RISING SHED'] = editableMeta.risingShed ? 'true' : 'false';
+    if (editableMeta.liftplan) secs['WEAVING']['INTERLACEMENT'] = 'Liftplan';
 
     if (editableMeta.notes.trim()) {
       const noteLines = editableMeta.notes.split('\n');
@@ -1216,21 +1278,34 @@ function serializeWIF() {
     }
     secs['THREADING'] = th;
   }
-  if (editableTreadling && !d.hasLiftplan) {
-    const tr = Object.create(null);
+  const exportLiftplan = !!(editableMeta?.liftplan) || d.hasLiftplan;
+  if (exportLiftplan && editableLiftplan) {
+    const lp = Object.create(null);
     for (let i = 1; i <= serialWeftThreads; i++) {
-      const treadles = editableTreadling[i] || [];
-      if (treadles.length > 0) tr[String(i)] = treadles.join(',');
+      const sh = editableLiftplan[i] || [];
+      if (sh.length > 0) lp[String(i)] = sh.join(',');
     }
-    secs['TREADLING'] = tr;
-  }
-  if (editableTieup && !d.hasLiftplan) {
-    const tuSec = Object.create(null);
-    for (let t = 1; t <= d.treadles; t++) {
-      const sh = editableTieup[t] || [];
-      if (sh.length > 0) tuSec[String(t)] = sh.join(',');
+    secs['LIFTPLAN'] = lp;
+    delete secs['TREADLING'];
+    delete secs['TIEUP'];
+  } else if (!d.hasLiftplan) {
+    if (editableTreadling) {
+      const tr = Object.create(null);
+      for (let i = 1; i <= serialWeftThreads; i++) {
+        const treadles = editableTreadling[i] || [];
+        if (treadles.length > 0) tr[String(i)] = treadles.join(',');
+      }
+      secs['TREADLING'] = tr;
     }
-    secs['TIEUP'] = tuSec;
+    if (editableTieup) {
+      const tuSec = Object.create(null);
+      for (let t = 1; t <= d.treadles; t++) {
+        const sh = editableTieup[t] || [];
+        if (sh.length > 0) tuSec[String(t)] = sh.join(',');
+      }
+      secs['TIEUP'] = tuSec;
+    }
+    delete secs['LIFTPLAN'];
   }
 
   // ── Overwrite the four colour sections ────────────────────────────────
@@ -1254,7 +1329,7 @@ function serializeWIF() {
 
   // ── WEAVING computed fields ───────────────────────────────────────────
   if (!secs['WEAVING']) secs['WEAVING'] = {};
-  secs['WEAVING']['INTERLACEMENT'] = d.hasLiftplan ? 'Liftplan' : 'Straight';
+  secs['WEAVING']['INTERLACEMENT'] = exportLiftplan ? 'Liftplan' : 'Straight';
 
   const thSec = secs['THREADING'] || {};
   const shaftEndCount = {};
@@ -1485,7 +1560,7 @@ async function exportPDF() {
     ['Treadles',    String(d.treadles)],
     ['Warp ends',   String(d.warpThreads)],
     ['Weft picks',  String(d.weftThreads)],
-    ['Rising shed', editableMeta ? (editableMeta.risingShed ? 'Yes' : 'No') : null],
+    ['Shed type',   editableMeta ? (editableMeta.liftplan ? 'Liftplan' : (editableMeta.risingShed ? 'Rising' : 'Sinking')) : null],
   ].filter(([, v]) => v != null && v !== '');
 
   const colorSet = new Set();
@@ -2304,22 +2379,33 @@ function handleStructureEdit(canvasId, x, y) {
       editableWarpColors[warpThread] = selectedColor;
     }
   } else if (canvasId === 'cTreadling') {
-    const T = d.treadles;
     const row = Math.floor(y / cs);
     const col = Math.floor(x / cs);
-    if (row < 0 || row >= d.weftThreads || col < 0 || col >= T) return;
+    if (row < 0 || row >= d.weftThreads || col < 0 || col >= d.panelCols) return;
     const weftPick = row + 1;
-    const treadle = col + 1;
     selectedTreadlingRow = weftPick;
     updateTreadlingRowDisplay();
-    const existing = editableTreadling[weftPick] || [];
-    if (!existing.includes(treadle)) {
+    if (d.isLiftplan) {
+      const shaft    = col + 1;
+      const existing = editableLiftplan[weftPick] || [];
       pushHistory();
-      editableTreadling[weftPick] = [treadle];
+      if (existing.includes(shaft)) {
+        editableLiftplan[weftPick] = existing.filter(s => s !== shaft);
+      } else {
+        editableLiftplan[weftPick] = [...existing, shaft].sort((a, b) => a - b);
+      }
       if (selectedColor) editableWeftColors[weftPick] = selectedColor;
-    } else if (selectedColor && editableWeftColors[weftPick] !== selectedColor) {
-      pushHistory();
-      editableWeftColors[weftPick] = selectedColor;
+    } else {
+      const treadle  = col + 1;
+      const existing = editableTreadling[weftPick] || [];
+      if (!existing.includes(treadle)) {
+        pushHistory();
+        editableTreadling[weftPick] = [treadle];
+        if (selectedColor) editableWeftColors[weftPick] = selectedColor;
+      } else if (selectedColor && editableWeftColors[weftPick] !== selectedColor) {
+        pushHistory();
+        editableWeftColors[weftPick] = selectedColor;
+      }
     }
   } else if (canvasId === 'cTieup') {
     const S = d.shafts;
@@ -2380,13 +2466,15 @@ function drawStructurePreview(canvasId, mouseX, mouseY) {
       ctx.strokeRect(x0 + lw / 2, y0 + lw / 2, cs - lw, cs - lw);
     }
   } else if (canvasId === 'cTreadling') {
-    const T = d.treadles;
     const row = Math.floor(mouseY / cs);
     const col = Math.floor(mouseX / cs);
-    if (row < 0 || row >= d.weftThreads || col < 0 || col >= T) return;
-    const isSet = (editableTreadling[row + 1] || []).includes(col + 1);
+    if (row < 0 || row >= d.weftThreads || col < 0 || col >= d.panelCols) return;
+    const pick = row + 1;
+    const isSet = d.isLiftplan
+      ? (editableLiftplan?.[pick] || []).includes(col + 1)
+      : (editableTreadling?.[pick] || []).includes(col + 1);
     const x0 = col * cs, y0 = row * cs;
-    if (!isSet && selectedColor) {
+    if (!isSet && selectedColor && !d.isLiftplan) {
       const [r, g, b] = parseRGB(selectedColor);
       ctx.fillStyle = `rgba(${r},${g},${b},0.75)`;
       ctx.fillRect(x0, y0, cs, cs);
@@ -2657,23 +2745,40 @@ function addWarpRepeat() {
 }
 
 function addWeftRepeat() {
-  if (!editableTreadling || editableWeftThreads === null) return;
-  const E = editableWeftThreads;
-  const repeatLen = findRepeat(i => editableTreadling[i], E);
-  pushHistory();
-  const newTreadling = Object.create(null);
-  const newColors    = [];
-  for (let i = 1; i <= E; i++) {
-    newTreadling[i] = (editableTreadling[i] || []).slice();
-    newColors[i]    = editableWeftColors[i];
+  if (editableWeftThreads === null) return;
+  const E      = editableWeftThreads;
+  const isLP   = !!(paintDraft?.isLiftplan);
+  const newColors = [];
+  for (let i = 1; i <= E; i++) newColors[i] = editableWeftColors[i];
+
+  if (isLP && editableLiftplan) {
+    const repeatLen    = findRepeat(i => editableLiftplan[i], E);
+    const newLiftplan  = Object.create(null);
+    for (let i = 1; i <= E; i++) newLiftplan[i] = (editableLiftplan[i] || []).slice();
+    for (let i = 1; i <= repeatLen; i++) {
+      newLiftplan[E + i] = (editableLiftplan[i] || []).slice();
+      newColors[E + i]   = editableWeftColors[i];
+    }
+    pushHistory();
+    editableLiftplan    = newLiftplan;
+    editableWeftColors  = newColors;
+    editableWeftThreads = E + repeatLen;
+  } else if (editableTreadling) {
+    const repeatLen    = findRepeat(i => editableTreadling[i], E);
+    const newTreadling = Object.create(null);
+    for (let i = 1; i <= E; i++) newTreadling[i] = (editableTreadling[i] || []).slice();
+    for (let i = 1; i <= repeatLen; i++) {
+      newTreadling[E + i] = (editableTreadling[i] || []).slice();
+      newColors[E + i]    = editableWeftColors[i];
+    }
+    pushHistory();
+    editableTreadling   = newTreadling;
+    editableWeftColors  = newColors;
+    editableWeftThreads = E + repeatLen;
+  } else {
+    return;
   }
-  for (let i = 1; i <= repeatLen; i++) {
-    newTreadling[E + i] = (editableTreadling[i] || []).slice();
-    newColors[E + i]    = editableWeftColors[i];
-  }
-  editableTreadling   = newTreadling;
-  editableWeftColors  = newColors;
-  editableWeftThreads = E + repeatLen;
+
   if (selectedTreadlingRow !== null) selectedTreadlingRow = E + 1;
   updateTreadlingRowDisplay();
   renderDraft();
