@@ -171,13 +171,39 @@ function startNewDraft() {
     for (let i = 1; i <= picks; i++) treadling[i] = String(((i - 1) % 2) + 1);
   } else if (pattern === 'twill') {
     const floats = Math.max(1, Math.floor(shafts / 2));
-    for (let i = 1; i <= ends; i++)  threading[i] = String(((i - 1) % shafts) + 1);
     for (let t = 1; t <= treadles; t++) {
       const raised = [];
       for (let f = 0; f < floats; f++) raised.push(((t - 1 + f) % shafts) + 1);
       tieup[t] = raised.join(',');
     }
-    for (let i = 1; i <= picks; i++) treadling[i] = String(((i - 1) % treadles) + 1);
+    for (let i = 1; i <= ends; i++)
+      threading[i] = String(((i - 1) % shafts) + 1);
+    for (let i = 1; i <= picks; i++)
+      treadling[i] = String(((i - 1) % treadles) + 1);
+  } else if (pattern === 'herringbone') {
+    // Offset vertical herringbone: treadle t raises shafts t and t+1 (ring)
+    for (let t = 1; t <= shafts; t++) {
+      const s1 = ((t - 1) % shafts) + 1;
+      const s2 = (t % shafts) + 1;
+      tieup[t] = s1 + ',' + s2;
+    }
+    // Threading period: 3 blocks of N (N = shafts)
+    // Block 1: N, N-1, ..., 1
+    // Block 2: ascending pairs (N-1,N), (N-3,N-2), ..., (1,2)
+    // Block 3: N-1, N, then N-2, N-3, ..., 1
+    const N = shafts;
+    const period = [];
+    for (let s = N; s >= 1; s--) period.push(s);
+    for (let s = N - 1; s >= 1; s -= 2) {
+      period.push(s);
+      period.push(s + 1);
+    }
+    period.push(N - 1); period.push(N);
+    for (let s = N - 2; s >= 1; s--) period.push(s);
+    for (let i = 1; i <= ends; i++)
+      threading[i] = String(period[(i - 1) % period.length]);
+    for (let i = 1; i <= picks; i++)
+      treadling[i] = String(((i - 1) % shafts) + 1);
   }
 
   wifData['THREADING']     = threading;
@@ -202,12 +228,7 @@ function startNewDraft() {
   range.value = autoCs;
   document.getElementById('cellSizeLbl').textContent = autoCs + 'px';
   renderDraft();
-  const editStructureCheck = document.getElementById('editStructure');
-  if (editStructureCheck) {
-    const enableEdit = pattern === 'blank';
-    editStructureCheck.checked = enableEdit;
-    setStructureEditMode(enableEdit);
-  }
+  if (pattern === 'blank') setStructureEditMode(true);
 }
 
 function showError(msg) {
@@ -481,7 +502,9 @@ function buildMeta() {
 
   const cardsHtml = structCards.map(([l, v]) =>
     `<div class="info-card"><div class="lbl">${escHtml(String(l))}</div><div class="val">${escHtml(String(v))}</div></div>`
-  ).join('');
+  ).join('') +
+    `<div class="info-card"><div class="lbl">Warp float</div><div class="val" id="floatWarpVal">—</div></div>` +
+    `<div class="info-card"><div class="lbl">Weft float</div><div class="val" id="floatWeftVal">—</div></div>`;
 
   const rsChecked = editableMeta.risingShed ? ' checked' : '';
   const rsLabel   = editableMeta.risingShed ? 'Yes' : 'No';
@@ -790,13 +813,18 @@ function renderDraft() {
 
   // Pre-compute warp-on-top for every cell (Uint8Array for speed)
   const wotGrid = new Array(E + 1);
+  const hasTreadle = new Uint8Array(E + 1);
   for (let pick = 1; pick <= E; pick++) {
     const rs = d.getRaisedShafts(pick);
+    hasTreadle[pick] = rs.size > 0 ? 1 : 0;
     wotGrid[pick] = new Uint8Array(W + 1);
     for (let wi = 1; wi <= W; wi++) {
       const ws = d.threading[wi] || [];
       const hasShaft = ws.length > 0 && !(ws.length === 1 && ws[0] === 0);
-      if (hasShaft && rs.size > 0) {
+      if (!hasShaft) continue; // unthreaded warp: never shows in preview
+      if (rs.size === 0) {
+        wotGrid[pick][wi] = 1; // threaded warp with no treadle: show as warp
+      } else {
         wotGrid[pick][wi] = d.risingShed
           ? (ws.some(sh => rs.has(sh)) ? 1 : 0)
           : (ws.some(sh => rs.has(sh)) ? 0 : 1);
@@ -814,8 +842,9 @@ function renderDraft() {
     }
   }
 
-  // Pass B — weft threads (horizontal): vertical cylindrical gradient per row
+  // Pass B — weft threads (horizontal): only for picks with a treadle selection
   for (let pick = 1; pick <= E; pick++) {
+    if (!hasTreadle[pick]) continue;
     const y = (pick - 1) * cs;
     const [r, g, b] = parseRGB(editableWeftColors[pick] || d.weftDefaultColor);
     dCtx.fillStyle = threadGrad(dCtx, 0, y, 0, y + cs, r, g, b);
@@ -903,6 +932,32 @@ function renderDraft() {
   }
 
   if (showGrid) drawGridLines(dCtx, W, E, txOff, 0);
+
+  // ── FLOAT LENGTHS ──────────────────────────────────────
+  {
+    let maxWarpFloat = 0;
+    for (let wi = 1; wi <= W; wi++) {
+      let run = 0;
+      for (let pick = 1; pick <= E; pick++) {
+        if (!hasTreadle[pick]) { run = 0; continue; }
+        if (wotGrid[pick][wi]) { run++; if (run > maxWarpFloat) maxWarpFloat = run; }
+        else run = 0;
+      }
+    }
+    let maxWeftFloat = 0;
+    for (let pick = 1; pick <= E; pick++) {
+      if (!hasTreadle[pick]) continue;
+      let run = 0;
+      for (let wi = 1; wi <= W; wi++) {
+        if (!wotGrid[pick][wi]) { run++; if (run > maxWeftFloat) maxWeftFloat = run; }
+        else run = 0;
+      }
+    }
+    const warpEl = document.getElementById('floatWarpVal');
+    const weftEl = document.getElementById('floatWeftVal');
+    if (warpEl) warpEl.textContent = maxWarpFloat > 0 ? String(maxWarpFloat) : '—';
+    if (weftEl) weftEl.textContent = maxWeftFloat > 0 ? String(maxWeftFloat) : '—';
+  }
 
   // ── TREADLING ──────────────────────────────────────────
   if (T > 0) {
@@ -1311,25 +1366,25 @@ function showPDFLayoutDialog(numColPages, numRowPages) {
   });
 }
 
+function sortedStr(arr) { return (arr || []).slice().sort((a, b) => a - b).join(','); }
+function findRepeat(getData, count) {
+  const limit = Math.min(count, 512);
+  for (let p = 1; p <= Math.floor(limit / 2); p++) {
+    let ok = true;
+    for (let i = 1; i + p <= limit; i++) {
+      if (sortedStr(getData(i)) !== sortedStr(getData(i + p))) { ok = false; break; }
+    }
+    if (ok) return p;
+  }
+  return count;
+}
+
 async function exportPDF() {
   if (!wifData) return;
 
   const d    = paintDraft || extractDraft();
   const hasT = !d.hasLiftplan && d.treadles > 0;
   const T    = hasT ? d.treadles : 0;
-
-  function sortedStr(arr) { return (arr || []).slice().sort((a, b) => a - b).join(','); }
-  function findRepeat(getData, count) {
-    const limit = Math.min(count, 512);
-    for (let p = 1; p <= Math.floor(limit / 2); p++) {
-      let ok = true;
-      for (let i = 1; i + p <= limit; i++) {
-        if (sortedStr(getData(i)) !== sortedStr(getData(i + p))) { ok = false; break; }
-      }
-      if (ok) return p;
-    }
-    return count;
-  }
 
   const warpRepeat = findRepeat(i => d.threading[i], d.warpThreads);
 
@@ -2239,13 +2294,14 @@ function handleStructureEdit(canvasId, x, y) {
     const shaft = S - row;
     selectedThreadingCol = warpThread;
     updateThreadingColDisplay();
-    pushHistory();
     const existing = editableThreading[warpThread] || [];
-    if (existing.includes(shaft)) {
-      editableThreading[warpThread] = existing.filter(s => s !== shaft);
-    } else {
+    if (!existing.includes(shaft)) {
+      pushHistory();
       editableThreading[warpThread] = [shaft];
       if (selectedColor) editableWarpColors[warpThread] = selectedColor;
+    } else if (selectedColor && editableWarpColors[warpThread] !== selectedColor) {
+      pushHistory();
+      editableWarpColors[warpThread] = selectedColor;
     }
   } else if (canvasId === 'cTreadling') {
     const T = d.treadles;
@@ -2256,13 +2312,14 @@ function handleStructureEdit(canvasId, x, y) {
     const treadle = col + 1;
     selectedTreadlingRow = weftPick;
     updateTreadlingRowDisplay();
-    pushHistory();
     const existing = editableTreadling[weftPick] || [];
-    if (existing.includes(treadle)) {
-      editableTreadling[weftPick] = existing.filter(t => t !== treadle);
-    } else {
+    if (!existing.includes(treadle)) {
+      pushHistory();
       editableTreadling[weftPick] = [treadle];
       if (selectedColor) editableWeftColors[weftPick] = selectedColor;
+    } else if (selectedColor && editableWeftColors[weftPick] !== selectedColor) {
+      pushHistory();
+      editableWeftColors[weftPick] = selectedColor;
     }
   } else if (canvasId === 'cTieup') {
     const S = d.shafts;
@@ -2572,6 +2629,52 @@ async function removeTreadlingRows() {
   if (selectedTreadlingRow > editableWeftThreads) {
     selectedTreadlingRow = editableWeftThreads > 0 ? editableWeftThreads : null;
   }
+  updateTreadlingRowDisplay();
+  renderDraft();
+}
+
+function addWarpRepeat() {
+  if (!editableThreading || editableWarpThreads === null) return;
+  const W = editableWarpThreads;
+  const repeatLen = findRepeat(i => editableThreading[i], W);
+  pushHistory();
+  const newThreading = Object.create(null);
+  const newColors    = [];
+  for (let i = 1; i <= W; i++) {
+    newThreading[i] = (editableThreading[i] || []).slice();
+    newColors[i]    = editableWarpColors[i];
+  }
+  for (let i = 1; i <= repeatLen; i++) {
+    newThreading[W + i] = (editableThreading[i] || []).slice();
+    newColors[W + i]    = editableWarpColors[i];
+  }
+  editableThreading   = newThreading;
+  editableWarpColors  = newColors;
+  editableWarpThreads = W + repeatLen;
+  if (selectedThreadingCol !== null) selectedThreadingCol = W + 1;
+  updateThreadingColDisplay();
+  renderDraft();
+}
+
+function addWeftRepeat() {
+  if (!editableTreadling || editableWeftThreads === null) return;
+  const E = editableWeftThreads;
+  const repeatLen = findRepeat(i => editableTreadling[i], E);
+  pushHistory();
+  const newTreadling = Object.create(null);
+  const newColors    = [];
+  for (let i = 1; i <= E; i++) {
+    newTreadling[i] = (editableTreadling[i] || []).slice();
+    newColors[i]    = editableWeftColors[i];
+  }
+  for (let i = 1; i <= repeatLen; i++) {
+    newTreadling[E + i] = (editableTreadling[i] || []).slice();
+    newColors[E + i]    = editableWeftColors[i];
+  }
+  editableTreadling   = newTreadling;
+  editableWeftColors  = newColors;
+  editableWeftThreads = E + repeatLen;
+  if (selectedTreadlingRow !== null) selectedTreadlingRow = E + 1;
   updateTreadlingRowDisplay();
   renderDraft();
 }

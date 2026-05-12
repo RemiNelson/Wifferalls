@@ -63,6 +63,7 @@
             <option value="blank">Blank</option>
             <option value="plainweave">Plain weave</option>
             <option value="twill">Twill</option>
+            <option value="herringbone">Herringbone</option>
           </select>
         </label>
         <label class="nd-checkbox-row toggle-label">
@@ -137,6 +138,9 @@
       <span class="toggle-track"><span class="toggle-thumb"></span></span>
       Shaft / treadle labels
     </label>
+    <button class="btn btn-ghost btn-sm" onclick="undo()" title="Undo (Ctrl+Z)">&#x21A9; Undo</button>
+    <button class="btn btn-ghost btn-sm" onclick="addWarpRepeat()" title="Append one warp repeat">+ Warp repeat</button>
+    <button class="btn btn-ghost btn-sm" onclick="addWeftRepeat()" title="Append one weft repeat">+ Weft repeat</button>
     <button class="btn btn-ghost btn-sm" id="editStructureBtn" onclick="setStructureEditMode(!structureEditMode)">Edit threading / treadling</button>
     <div id="structEditControls" style="display:none; flex-basis:100%;">
       <div class="struct-ctrl-group">
