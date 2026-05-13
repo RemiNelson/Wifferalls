@@ -35,6 +35,12 @@ let paintLblSize = 0;
 // When true, renderDraft uses a white background (for PDF export)
 let printMode = false;
 
+// When true, renderDraft skips the expensive drawdown fill (used for progressive first pass)
+let renderSkipDrawdown = false;
+
+// Drafts with more than this many cells get a loading overlay before rendering
+const RENDER_THRESHOLD = 40000;
+
 // Editable metadata (text fields + rising shed)
 let editableMeta = null; // { title, author, email, notes, risingShed, liftplan }
 
@@ -96,7 +102,7 @@ function loadFile(file) {
       range.max   = Math.max(32, autoCs);     // extend upper end if draft is narrow
       range.value = autoCs;
       document.getElementById('cellSizeLbl').textContent = autoCs + 'px';
-      renderDraft();
+      renderDraftAsync('Loading draft…');
     } catch (err) {
       showError(err.message);
     }
@@ -130,6 +136,51 @@ function resetApp() {
   document.querySelectorAll('.swatch').forEach(s => s.classList.remove('selected'));
   const eyeBtn = document.getElementById('eyedropperBtn');
   if (eyeBtn) eyeBtn.classList.remove('active');
+}
+
+/* ═══════════════════════════════════════════════════
+   RENDER LOADING OVERLAY
+═══════════════════════════════════════════════════ */
+
+function showRenderLoader(msg) {
+  document.getElementById('renderLoaderMsg').textContent = msg || 'Rendering draft…';
+  document.getElementById('renderLoader').classList.add('visible');
+}
+
+function hideRenderLoader() {
+  document.getElementById('renderLoader').classList.remove('visible');
+}
+
+function isLargeRender() {
+  if (editableWarpThreads !== null && editableWeftThreads !== null) {
+    return editableWarpThreads * editableWeftThreads > RENDER_THRESHOLD;
+  }
+  // Before the first renderDraft() seeds the editable counts, read from wifData directly
+  if (!wifData) return false;
+  const d = extractDraft();
+  return d.warpThreads * d.weftThreads > RENDER_THRESHOLD;
+}
+
+// For large drafts: show a loading overlay, render the fast panels first so the
+// user sees threading/tieup immediately, then fill in the drawdown a frame later.
+function renderDraftAsync(msg) {
+  if (!isLargeRender()) {
+    renderDraft();
+    return;
+  }
+  showRenderLoader(msg || 'Rendering draft…');
+  // Frame 1: browser paints the overlay
+  requestAnimationFrame(() => {
+    // Frame 2: render everything except the drawdown (fast pass)
+    renderSkipDrawdown = true;
+    renderDraft();
+    renderSkipDrawdown = false;
+    // Frame 3: render the full drawdown and dismiss the overlay
+    requestAnimationFrame(() => {
+      renderDraft();
+      hideRenderLoader();
+    });
+  });
 }
 
 function startNewDraft() {
@@ -232,7 +283,7 @@ function startNewDraft() {
   range.max   = Math.max(32, autoCs);
   range.value = autoCs;
   document.getElementById('cellSizeLbl').textContent = autoCs + 'px';
-  renderDraft();
+  renderDraftAsync('Creating draft…');
   if (pattern === 'blank') setStructureEditMode(true);
 }
 
@@ -586,7 +637,7 @@ function buildMeta() {
 function changeCellSize(v) {
   cellSize = v;
   document.getElementById('cellSizeLbl').textContent = v + 'px';
-  renderDraft();
+  renderDraftAsync();
 }
 
 // Compute the largest integer cell size that fits the full draft width inside
@@ -848,6 +899,10 @@ function renderDraft() {
 
   // ── DRAWDOWN ───────────────────────────────────────────
   clearCanvas(dCtx, drawdownW, drawdownH);
+  if (renderSkipDrawdown) {
+    if (showGrid) drawGridLines(dCtx, W, E, txOff, 0);
+    // Skip all fill passes — drawdown will be completed in the next render call
+  } else {
 
   // Pre-compute warp-on-top for every cell (Uint8Array for speed)
   const wotGrid = new Array(E + 1);
@@ -996,6 +1051,8 @@ function renderDraft() {
     if (warpEl) warpEl.textContent = maxWarpFloat > 0 ? String(maxWarpFloat) : '—';
     if (weftEl) weftEl.textContent = maxWeftFloat > 0 ? String(maxWeftFloat) : '—';
   }
+
+  } // end renderSkipDrawdown else
 
   // ── TREADLING / LIFTPLAN ───────────────────────────────
   if (panelCols > 0) {
