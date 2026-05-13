@@ -808,22 +808,25 @@ function renderDraft() {
     }
   }
   if (showGrid) drawGridLines(tCtx, W, S, txOff, 0, GRID_COL_STRUCT, 1);
-  if (printMode) {
-    const whitePath = new Path2D();
-    const bw = Math.max(2, Math.round(cs * 0.14));
-    const half = bw / 2;
-    for (let wi = 1; wi <= W; wi++) {
-      const [r, g, b] = parseRGB(editableWarpColors[wi] || d.warpDefaultColor);
-      if (r > 240 && g > 240 && b > 240) {
-        for (const sh of (d.threading[wi] || [])) {
-          if (sh < 1 || sh > S) continue;
-          whitePath.rect(txOff + (wi - 1) * cs + half, (S - sh) * cs + half, cs - bw, cs - bw);
+  {
+    const bgLum = printMode ? 1.0 : relativeLuminance(12, 13, 20);
+    const bw    = Math.min(2, Math.round(cs * (printMode ? 0.07 : 0.09)));
+    if (bw > 0) {
+      const half  = bw / 2;
+      const borderPath = new Path2D();
+      for (let wi = 1; wi <= W; wi++) {
+        const [r, g, b] = parseRGB(editableWarpColors[wi] || d.warpDefaultColor);
+        if (contrastVsBg(r, g, b, bgLum) < 3.0) {
+          for (const sh of (d.threading[wi] || [])) {
+            if (sh < 1 || sh > S) continue;
+            borderPath.rect(txOff + (wi - 1) * cs + half, (S - sh) * cs + half, cs - bw, cs - bw);
+          }
         }
       }
+      tCtx.strokeStyle = printMode ? '#000000' : '#ffffff';
+      tCtx.lineWidth = bw;
+      tCtx.stroke(borderPath);
     }
-    tCtx.strokeStyle = '#000000';
-    tCtx.lineWidth = bw;
-    tCtx.stroke(whitePath);
   }
   drawShaftLabels(tCtx, S, txOff, 0);
 
@@ -1010,6 +1013,22 @@ function renderDraft() {
         }
       }
       if (showGrid) drawGridLines(rCtx, S, E, 0, 0, GRID_COL_STRUCT, 1);
+      {
+        const bgLum = printMode ? 1.0 : relativeLuminance(12, 13, 20);
+        const bw = Math.min(2, Math.round(cs * (printMode ? 0.07 : 0.09)));
+        const half = bw / 2;
+        const borderPath = bw > 0 ? new Path2D() : null;
+        for (let pick = 1; pick <= E; pick++) {
+          const [r, g, b] = parseRGB(editableWeftColors[pick] || d.weftDefaultColor);
+          if (contrastVsBg(r, g, b, bgLum) < 3.0) {
+            for (const sh of (editableLiftplan[pick] || [])) {
+              if (sh < 1 || sh > S) continue;
+              borderPath.rect((sh - 1) * cs + half, (pick - 1) * cs + half, cs - bw, cs - bw);
+            }
+          }
+        }
+        if (borderPath) { rCtx.strokeStyle = printMode ? '#000000' : '#ffffff'; rCtx.lineWidth = bw; rCtx.stroke(borderPath); }
+      }
       // Shaft column labels at top (reuse label style)
       if (lblSize > 0) {
         rCtx.save();
@@ -1035,22 +1054,21 @@ function renderDraft() {
         }
       }
       if (showGrid) drawGridLines(rCtx, panelCols, E, 0, 0, GRID_COL_STRUCT, 1);
-      if (printMode) {
-        const whitePath = new Path2D();
-        const bw = Math.max(2, Math.round(cs * 0.14));
+      {
+        const bgLum = printMode ? 1.0 : relativeLuminance(12, 13, 20);
+        const bw = Math.min(2, Math.round(cs * (printMode ? 0.07 : 0.09)));
         const half = bw / 2;
+        const borderPath = bw > 0 ? new Path2D() : null;
         for (let pick = 1; pick <= E; pick++) {
           const [r, g, b] = parseRGB(editableWeftColors[pick] || d.weftDefaultColor);
-          if (r > 240 && g > 240 && b > 240) {
+          if (contrastVsBg(r, g, b, bgLum) < 3.0) {
             for (const tr of (d.treadling[pick] || [])) {
               if (tr < 1 || tr > panelCols) continue;
-              whitePath.rect((tr - 1) * cs + half, (pick - 1) * cs + half, cs - bw, cs - bw);
+              borderPath.rect((tr - 1) * cs + half, (pick - 1) * cs + half, cs - bw, cs - bw);
             }
           }
         }
-        rCtx.strokeStyle = '#000000';
-        rCtx.lineWidth = bw;
-        rCtx.stroke(whitePath);
+        if (borderPath) { rCtx.strokeStyle = printMode ? '#000000' : '#ffffff'; rCtx.lineWidth = bw; rCtx.stroke(borderPath); }
       }
     }
   }
@@ -1397,6 +1415,16 @@ function getExportBasename() {
   return (document.getElementById('fileName').textContent || 'draft').replace(/\.wif$/i, '');
 }
 
+function relativeLuminance(r, g, b) {
+  const lin = c => { const s = c / 255; return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4); };
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+function contrastVsBg(r, g, b, bgLum) {
+  const L = relativeLuminance(r, g, b);
+  const lo = Math.min(L, bgLum), hi = Math.max(L, bgLum);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
 function exportWIF() {
   if (!wifData || !editableWarpColors) return;
   const text = serializeWIF();
@@ -1457,9 +1485,11 @@ function findRepeat(getData, count) {
 async function exportPDF() {
   if (!wifData) return;
 
-  const d    = paintDraft || extractDraft();
-  const hasT = !d.hasLiftplan && d.treadles > 0;
-  const T    = hasT ? d.treadles : 0;
+  const d          = paintDraft || extractDraft();
+  const hasT       = !d.hasLiftplan && d.treadles > 0;
+  const isLiftplan = !!(editableMeta ? editableMeta.liftplan : d.hasLiftplan);
+  const T          = hasT ? d.treadles : 0;
+  const panelCols  = hasT ? T : (isLiftplan ? d.shafts : 0);
 
   const warpRepeat = findRepeat(i => d.threading[i], d.warpThreads);
 
@@ -1468,7 +1498,7 @@ async function exportPDF() {
   const showLbls = document.getElementById('showLabels').checked;
 
   function csForWarp(warpCols) {
-    const total = warpCols + T;
+    const total = warpCols + panelCols;
     if (total === 0) return MIN_CS;
     const rough = Math.floor(PAGE_W / total);
     const lbl   = (showLbls && rough >= 8) ? Math.max(16, rough) : 0;
@@ -1480,7 +1510,7 @@ async function exportPDF() {
   if (csForWarp(d.warpThreads) < MIN_CS) {
     const PX_PER_MM_D   = 96 / 25.4;
     const GRID_OVERHEAD = 14; // mm: sheet label + rule + panel-label rows
-    const warpPerPageG  = Math.max(1, Math.floor((PAGE_W - T * MIN_CS) / MIN_CS));
+    const warpPerPageG  = Math.max(1, Math.floor((PAGE_W - panelCols * MIN_CS) / MIN_CS));
     const numColPages   = Math.ceil(d.warpThreads / warpPerPageG);
     const tHG           = Math.max(1, d.shafts || 0) * MIN_CS;
     const availBodyMmG  = 210 - 15 - 15 - GRID_OVERHEAD - tHG / PX_PER_MM_D;
@@ -1499,7 +1529,7 @@ async function exportPDF() {
   if (!useGrid && csForWarp(displayWarp) < MIN_CS) {
     clippedWarp = true;
     const lblEst  = (showLbls && MIN_CS >= 8) ? Math.max(16, MIN_CS) : 0;
-    const budget  = PAGE_W - T * MIN_CS - lblEst;
+    const budget  = PAGE_W - panelCols * MIN_CS - lblEst;
     const maxRpts = Math.max(1, Math.floor(budget / (warpRepeat * MIN_CS)));
     displayWarp   = maxRpts * warpRepeat;
   }
@@ -1537,12 +1567,16 @@ async function exportPDF() {
     const elTread = document.getElementById('cTreadling');
     capTieup = cropCanvas(elTieup, 0, 0, elTieup.width, elTieup.height);
     capTread = cropCanvas(elTread, 0, 0, elTread.width, weftPx);
+  } else if (isLiftplan) {
+    const elTread = document.getElementById('cTreadling');
+    capTread = cropCanvas(elTread, 0, 0, elTread.width, weftPx);
   }
 
-  const tW = capThread.width;
-  const tH = capThread.height;
-  const uW = capTieup ? capTieup.width : 0;
-  const rW = capTread ? capTread.width : 0;
+  const tW     = capThread.width;
+  const tH     = capThread.height;
+  const uW     = capTieup ? capTieup.width : 0;
+  const rW     = capTread ? capTread.width : 0;
+  const rightW = uW || rW; // right-panel width (tieup=uW for floor loom, rW for liftplan)
 
   printMode = false;
   cellSize  = origCs;
@@ -1581,7 +1615,7 @@ async function exportPDF() {
     // cs = MIN_CS = 4, lblSize = 0 (cs < 8 ⟹ no label strips rendered).
     // ═══════════════════════════════════════════════════════════════════════
     const GRID_OVERHEAD = 14; // mm: sheet-label row (5) + rule (3) + panel-label row (3) + gap (3)
-    const warpPerPage   = Math.max(1, Math.floor((PAGE_W - T * cs) / cs));
+    const warpPerPage   = Math.max(1, Math.floor((PAGE_W - panelCols * cs) / cs));
     const numColPages   = Math.ceil(captureWarp / warpPerPage);
     const headerMmG     = tH / PX_PER_MM;
     const availBodyMmG  = PAGE_H - BMARGIN - ML - GRID_OVERHEAD - headerMmG;
@@ -1604,7 +1638,7 @@ async function exportPDF() {
         const warpCols       = Math.min(warpPerPage, captureWarp - warpStart);
         const warpPxSlice    = warpCols * cs;
         const isRightmostCol = cp === numColPages - 1;
-        const pageImgPx      = warpPxSlice + (isRightmostCol ? uW : 0);
+        const pageImgPx      = warpPxSlice + (isRightmostCol ? rightW : 0);
         const pageImgScale   = Math.min(1, CW / (pageImgPx / PX_PER_MM));
         const imgWmm         = (pageImgPx / PX_PER_MM) * pageImgScale;
 
@@ -1621,11 +1655,14 @@ async function exportPDF() {
         y += 3;
 
         // Panel labels
-        const tWmm_g = (warpPxSlice / PX_PER_MM) * pageImgScale;
-        const uWmm_g = (isRightmostCol && uW > 0) ? (uW / PX_PER_MM) * pageImgScale : 0;
+        const tWmm_g    = (warpPxSlice / PX_PER_MM) * pageImgScale;
+        const rightWmm_g = (isRightmostCol && rightW > 0) ? (rightW / PX_PER_MM) * pageImgScale : 0;
         doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(130);
         doc.text('Threading', ML + tWmm_g / 2, y, { align: 'center' });
-        if (hasT && isRightmostCol) doc.text('Tie-up', ML + tWmm_g + uWmm_g / 2, y, { align: 'center' });
+        if (isRightmostCol && rightW > 0) {
+          const rLabel = hasT ? 'Tie-up' : 'Liftplan';
+          doc.text(rLabel, ML + tWmm_g + rightWmm_g / 2, y, { align: 'center' });
+        }
         y += 3;
 
         // Header: threading slice + tieup (tieup only on rightmost column page)
@@ -1636,6 +1673,7 @@ async function exportPDF() {
         hCtx.fillStyle = '#ffffff'; hCtx.fillRect(0, 0, hCvs.width, hCvs.height);
         hCtx.drawImage(capThread, warpStart * cs, 0, warpPxSlice, tH, 0, 0, warpPxSlice, tH);
         if (hasT && isRightmostCol) hCtx.drawImage(capTieup, 0, 0, uW, tH, warpPxSlice, 0, uW, tH);
+        // liftplan: no tieup in header row — right side stays white
         const hMm = (tH / PX_PER_MM) * pageImgScale;
         doc.addImage(hCvs, 'PNG', ML, y, imgWmm, hMm);
         y += hMm;
@@ -1648,8 +1686,8 @@ async function exportPDF() {
         bCtx.fillStyle = '#ffffff'; bCtx.fillRect(0, 0, bCvs.width, bCvs.height);
         bCtx.drawImage(capDraw, warpStart * cs, weftStart * cs, warpPxSlice, weftPxSlice,
                        0, 0, warpPxSlice, weftPxSlice);
-        if (hasT && isRightmostCol) bCtx.drawImage(capTread, 0, weftStart * cs, rW, weftPxSlice,
-                       warpPxSlice, 0, rW, weftPxSlice);
+        if ((hasT || isLiftplan) && isRightmostCol && capTread)
+          bCtx.drawImage(capTread, 0, weftStart * cs, rW, weftPxSlice, warpPxSlice, 0, rW, weftPxSlice);
         const bMm = (weftPxSlice / PX_PER_MM) * pageImgScale;
         doc.addImage(bCvs, 'PNG', ML, y, imgWmm, bMm);
       }
@@ -1755,7 +1793,7 @@ async function exportPDF() {
 
     sectionRule('DRAFT');
 
-    const natImgW  = tW + uW;
+    const natImgW  = tW + rightW;
     const imgScale = Math.min(1, CW / (natImgW / PX_PER_MM));
     const imgWmm   = (natImgW / PX_PER_MM) * imgScale;
     const rowMm    = (cs / PX_PER_MM) * imgScale;
@@ -1768,13 +1806,17 @@ async function exportPDF() {
     hCtxF.fillStyle = '#ffffff'; hCtxF.fillRect(0, 0, capHeader.width, capHeader.height);
     hCtxF.drawImage(capThread, 0, 0);
     if (hasT) hCtxF.drawImage(capTieup, tW, 0);
+    // liftplan: no tieup in header — right column stays white
     const headerMm = (tH / PX_PER_MM) * imgScale;
 
-    const tWmm = (tW / natImgW) * imgWmm;
-    const uWmm = uW > 0 ? (uW / natImgW) * imgWmm : 0;
+    const tWmm     = (tW / natImgW) * imgWmm;
+    const rightWmm = rightW > 0 ? (rightW / natImgW) * imgWmm : 0;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(130);
     doc.text('Threading', ML + tWmm / 2, y, { align: 'center' });
-    if (hasT) doc.text('Tie-up', ML + tWmm + uWmm / 2, y, { align: 'center' });
+    if (rightW > 0) {
+      const rLabel = hasT ? 'Tie-up' : 'Liftplan';
+      doc.text(rLabel, ML + tWmm + rightWmm / 2, y, { align: 'center' });
+    }
     y += 3;
 
     newPageIfNeeded(headerMm);
@@ -1796,7 +1838,7 @@ async function exportPDF() {
       const sCtx = sliceCanvas.getContext('2d');
       sCtx.fillStyle = '#ffffff'; sCtx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
       sCtx.drawImage(capDraw,  0, weftRow * cs, tW, slicePx, 0,  0, tW, slicePx);
-      if (hasT) sCtx.drawImage(capTread, 0, weftRow * cs, rW, slicePx, tW, 0, rW, slicePx);
+      if (capTread) sCtx.drawImage(capTread, 0, weftRow * cs, rW, slicePx, tW, 0, rW, slicePx);
 
       doc.addImage(sliceCanvas, 'PNG', ML, y, imgWmm, sliceMm);
       y += sliceMm;
