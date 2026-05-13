@@ -569,6 +569,38 @@
       padding: 0;
       background: transparent;
     }
+    /* ── Render loading overlay ── */
+    #renderLoader {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(12, 13, 20, 0.78);
+      backdrop-filter: blur(2px);
+      z-index: 300;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 0.85rem;
+    }
+    #renderLoader.visible { display: flex; }
+
+    .rl-spinner {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 2.5px solid rgba(168, 216, 190, 0.12);
+      border-top-color: var(--accent);
+      will-change: transform;
+      animation: rl-spin 0.72s linear infinite;
+    }
+    @keyframes rl-spin { to { transform: rotate(360deg); } }
+
+    .rl-msg {
+      font-size: 0.78rem;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+    }
+
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after {
         transition-duration: 0.01ms !important;
