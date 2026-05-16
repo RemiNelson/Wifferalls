@@ -9,6 +9,8 @@
   <meta property="og:description" content="A lightweight front end tool for viewing, editing and printing Weaving Information File (.wif)">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:image" content="on_the_loom.jpg">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#12131a">
   <link rel="stylesheet" href="stylesheet.css">
 </head>
 <body>
@@ -207,5 +209,8 @@
 
 <script src="jspdf.umd.min.js"></script>
 <script src="scripts.js"></script>
+<script>
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
+</script>
 </body>
 </html>
