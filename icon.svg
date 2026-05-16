@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <rect width="192" height="192" rx="32" fill="#12131a"/>
+  <!-- 4x4 weaving draft: teal=#a8d8be (warp up), blue=#7b8cde (weft up), 2/2 twill -->
+  <rect x="13" y="13"  width="40" height="40" rx="3" fill="#a8d8be"/>
+  <rect x="55" y="13"  width="40" height="40" rx="3" fill="#a8d8be"/>
+  <rect x="97" y="13"  width="40" height="40" rx="3" fill="#7b8cde"/>
+  <rect x="139" y="13" width="40" height="40" rx="3" fill="#7b8cde"/>
+
+  <rect x="13" y="55"  width="40" height="40" rx="3" fill="#a8d8be"/>
+  <rect x="55" y="55"  width="40" height="40" rx="3" fill="#7b8cde"/>
+  <rect x="97" y="55"  width="40" height="40" rx="3" fill="#7b8cde"/>
+  <rect x="139" y="55" width="40" height="40" rx="3" fill="#a8d8be"/>
+
+  <rect x="13" y="97"  width="40" height="40" rx="3" fill="#7b8cde"/>
+  <rect x="55" y="97"  width="40" height="40" rx="3" fill="#7b8cde"/>
+  <rect x="97" y="97"  width="40" height="40" rx="3" fill="#a8d8be"/>
+  <rect x="139" y="97" width="40" height="40" rx="3" fill="#a8d8be"/>
+
+  <rect x="13" y="139"  width="40" height="40" rx="3" fill="#7b8cde"/>
+  <rect x="55" y="139"  width="40" height="40" rx="3" fill="#a8d8be"/>
+  <rect x="97" y="139"  width="40" height="40" rx="3" fill="#a8d8be"/>
+  <rect x="139" y="139" width="40" height="40" rx="3" fill="#7b8cde"/>
+</svg>
