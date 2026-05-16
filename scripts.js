@@ -236,30 +236,24 @@ function startNewDraft() {
       threading[i] = String(((i - 1) % shafts) + 1);
     for (let i = 1; i <= picks; i++)
       treadling[i] = String(((i - 1) % treadles) + 1);
-  } else if (pattern === 'herringbone') {
-    // Offset vertical herringbone: treadle t raises shafts t and t+1 (ring)
-    for (let t = 1; t <= shafts; t++) {
-      const s1 = ((t - 1) % shafts) + 1;
-      const s2 = (t % shafts) + 1;
-      tieup[t] = s1 + ',' + s2;
-    }
-    // Threading period: 3 blocks of N (N = shafts)
-    // Block 1: N, N-1, ..., 1
-    // Block 2: ascending pairs (N-1,N), (N-3,N-2), ..., (1,2)
-    // Block 3: N-1, N, then N-2, N-3, ..., 1
+  } else if (pattern === 'chevron') {
+    // Pointed twill: treadle t raises N/2 consecutive shafts starting at t (mod N).
+    // Works for any shaft count; 4-shaft tieup is unchanged ({1,2},{2,3},{3,4},{4,1}).
     const N = shafts;
-    const period = [];
-    for (let s = N; s >= 1; s--) period.push(s);
-    for (let s = N - 1; s >= 1; s -= 2) {
-      period.push(s);
-      period.push(s + 1);
+    const halfN = Math.floor(N / 2);
+    for (let t = 1; t <= N; t++) {
+      const raised = [];
+      for (let k = 0; k < halfN; k++) raised.push(((t - 1 + k) % N) + 1);
+      tieup[t] = raised.join(',');
     }
-    period.push(N - 1); period.push(N);
-    for (let s = N - 2; s >= 1; s--) period.push(s);
+    // Threading: ascend 1→N then descend N-1→2 (period = 2N-2, no repeated endpoints)
+    const period = [];
+    for (let s = 1; s <= N; s++) period.push(s);
+    for (let s = N - 1; s >= 2; s--) period.push(s);
     for (let i = 1; i <= ends; i++)
       threading[i] = String(period[(i - 1) % period.length]);
     for (let i = 1; i <= picks; i++)
-      treadling[i] = String(((i - 1) % shafts) + 1);
+      treadling[i] = String(((i - 1) % N) + 1);
   }
 
   wifData['THREADING']     = threading;
@@ -1231,7 +1225,7 @@ const CSS_COLOR_NAMES = {
   '#d3d3d3':'Light Gray','#90ee90':'Light Green','#ffb6c1':'Light Pink','#ffa07a':'Light Salmon',
   '#20b2aa':'Light Sea Green','#87cefa':'Light Sky Blue','#778899':'Light Slate Gray',
   '#b0c4de':'Light Steel Blue','#ffffe0':'Light Yellow','#00ff00':'Lime','#32cd32':'Lime Green',
-  '#faf0e6':'Linen','#ff00ff':'Magenta','#800000':'Maroon','#66cdaa':'Medium Aquamarine',
+  '#faf0e6':'Linen','#800000':'Maroon','#66cdaa':'Medium Aquamarine',
   '#0000cd':'Medium Blue','#ba55d3':'Medium Orchid','#9370db':'Medium Purple',
   '#3cb371':'Medium Sea Green','#7b68ee':'Medium Slate Blue','#00fa9a':'Medium Spring Green',
   '#48d1cc':'Medium Turquoise','#c71585':'Medium Violet Red','#191970':'Midnight Blue',
