@@ -31,8 +31,8 @@
   <div class="upload-options">
     <div class="drop-zone" id="dropZone">
       <div class="icon" aria-hidden="true"><img src="icon.svg" width="64" height="64" alt=""></div>
-      <h2>Open a WIF file</h2>
-      <p>Drag &amp; drop a .wif file here, or click below to browse</p>
+      <h2>Open a WIF</h2>
+      <p>Drag &amp; drop a .wif here, or click below to browse</p>
       <button class="btn" id="browseBtn">Choose File</button>
       <input type="file" id="fileInput" accept=".wif,.WIF">
     </div>
@@ -92,7 +92,7 @@
       <span class="filesize" id="fileSize"></span>
     </div>
     <div style="display:flex;gap:0.5rem;">
-      <button class="btn btn-ghost btn-sm" id="exportBtn" onclick="exportWIF()" title="Download a WIF file with your colour edits"><span aria-hidden="true">&#x2193;</span> Export WIF</button>
+      <button class="btn btn-ghost btn-sm" id="exportBtn" onclick="exportWIF()" title="Download a WIF with your colour edits"><span aria-hidden="true">&#x2193;</span> Export WIF</button>
       <button class="btn btn-ghost btn-sm" onclick="exportPDF()" title="Open a print-ready PDF of the weaving draft"><span aria-hidden="true">&#x2399;</span> Export PDF</button>
       <button class="btn btn-ghost btn-sm" onclick="resetApp()">Load Another</button>
     </div>
