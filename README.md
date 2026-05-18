@@ -11,12 +11,12 @@ A browser-based viewer and editor for **Weaving Information Files** (WIF 1.0 / 1
 - Supports both standard treadle-based drafts and **liftplan** files (tie-up and treadling panels are hidden automatically)
 - Displays draft metadata: title, author, shaft/treadle counts, warp/weft end counts, rising-shed setting
 - Shows any notes embedded in the WIF file
-- Auto-fits the draft to the viewport on load; adjustable cell size (2 – 32 px) via slider
+- Auto-fits the draft to the viewport on load; adjustable zoom (10 – 400 %) via slider
 
 ### New draft creation
 - Start from a blank canvas — no WIF file required
 - Configure **ends** (warp threads), **picks** (weft threads), **shafts**, and **treadles**
-- Choose a **starting pattern**: Blank, Plain weave, or Twill
+- Choose a **starting pattern**: Blank, Plain weave, Twill, or Chevron
 - Set **rising shed** or sinking shed at creation time
 - The new draft opens with a starter palette and is immediately editable
 
@@ -63,7 +63,7 @@ A browser-based viewer and editor for **Weaving Information Files** (WIF 1.0 / 1
 | **Drawdown** (bottom left) | Simulated fabric — the woven cloth preview |
 | **Treadling** (bottom right) | Which treadle each weft pick activates |
 
-Use the controls bar (sticks to the top as you scroll) to adjust **cell size**, toggle **grid lines**, and toggle **shaft/treadle number labels**.
+Use the controls bar (sticks to the top as you scroll) to adjust **zoom**, toggle **grid lines**, and toggle **shaft/treadle number labels**.
 
 ### 3. Change thread colours
 
