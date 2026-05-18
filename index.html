@@ -128,10 +128,10 @@
 
   <div class="controls">
     <label>
-      Cell size
-      <input type="range" id="cellSizeRange" min="4" max="32" value="12"
+      Zoom
+      <input type="range" id="cellSizeRange" min="10" max="400" value="100"
              oninput="changeCellSize(+this.value)">
-      <span id="cellSizeLbl">12px</span>
+      <span id="cellSizeLbl">100%</span>
     </label>
     <label class="toggle-label">
       <input type="checkbox" id="showGrid" checked onchange="renderDraft()">
