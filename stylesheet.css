@@ -84,7 +84,7 @@
       background: color-mix(in srgb, var(--accent) 5%, transparent);
     }
     .drop-zone input[type=file] { display: none; }
-    .drop-zone .icon { font-size: 3rem; margin-bottom: 1rem; }
+    .drop-zone .icon { margin-bottom: 1rem; }
     .drop-zone h2 { font-size: 1.1rem; margin-bottom: 0.5rem; }
     .drop-zone p { color: var(--muted); font-size: 0.85rem; margin-bottom: 1.5rem; }
 
