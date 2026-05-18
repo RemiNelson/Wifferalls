@@ -6,6 +6,7 @@
 
 let wifData = null;
 let cellSize = 12;
+let baseCellSize = 12; // cell size at 100% zoom (set to auto-fit on load)
 
 // Editable thread colors (1-indexed, initialized from WIF on each file load)
 let editableWarpColors = null;
@@ -96,12 +97,11 @@ function loadFile(file) {
       // Auto-fit: pick the largest cell size that makes the full draft width
       // fit the current viewport, then let the user adjust from there.
       const autoCs = computeAutoFitCellSize();
+      baseCellSize = autoCs;
       cellSize = autoCs;
       const range = document.getElementById('cellSizeRange');
-      range.min   = 2;                        // allow finer zoom-out than default
-      range.max   = Math.max(32, autoCs);     // extend upper end if draft is narrow
-      range.value = autoCs;
-      document.getElementById('cellSizeLbl').textContent = autoCs + 'px';
+      range.value = 100;
+      document.getElementById('cellSizeLbl').textContent = '100%';
       renderDraftAsync('Loading draft…');
     } catch (err) {
       showError(err.message);
@@ -271,12 +271,11 @@ function startNewDraft() {
   buildMeta();
   document.getElementById('paletteSection').style.display = 'block';
   const autoCs = computeAutoFitCellSize();
+  baseCellSize = autoCs;
   cellSize = autoCs;
   const range = document.getElementById('cellSizeRange');
-  range.min   = 2;
-  range.max   = Math.max(32, autoCs);
-  range.value = autoCs;
-  document.getElementById('cellSizeLbl').textContent = autoCs + 'px';
+  range.value = 100;
+  document.getElementById('cellSizeLbl').textContent = '100%';
   renderDraftAsync('Creating draft…');
   if (pattern === 'blank') setStructureEditMode(true);
 }
@@ -628,9 +627,9 @@ function buildMeta() {
    DRAFT RENDERING
 ═══════════════════════════════════════════════════ */
 
-function changeCellSize(v) {
-  cellSize = v;
-  document.getElementById('cellSizeLbl').textContent = v + 'px';
+function changeCellSize(pct) {
+  cellSize = Math.max(1, Math.round(baseCellSize * pct / 100));
+  document.getElementById('cellSizeLbl').textContent = pct + '%';
   renderDraftAsync();
 }
 
