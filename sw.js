@@ -1,4 +1,4 @@
-const CACHE = 'wifferalls-v1';
+const CACHE = 'wifferalls-v2';
 const ASSETS = [
   '/',
   '/index.html',
@@ -7,6 +7,7 @@ const ASSETS = [
   '/jspdf.umd.min.js',
   '/manifest.json',
   '/icon.svg',
+  '/favicon.ico',
 ];
 
 self.addEventListener('install', e => {
